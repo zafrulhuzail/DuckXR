@@ -62,6 +62,17 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
+    "com.unity.ai.inference": {
+      "version": "2.2.1",
+      "depth": 1,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.burst": "1.8.17",
+        "com.unity.collections": "2.4.3",
+        "com.unity.modules.imageconversion": "1.0.0"
+      },
+      "url": "https://packages.unity.com"
+    },
     "com.unity.ai.navigation": {
       "version": "2.0.6",
       "depth": 0,
@@ -211,6 +222,14 @@
       "source": "registry",
       "dependencies": {},
       "url": "https://packages.unity.com"
+    },
+    "com.unity.sentis": {
+      "version": "file:com.unity.sentis",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.unity.ai.inference": "2.2.1"
+      }
     },
     "com.unity.shadergraph": {
       "version": "17.0.4",
