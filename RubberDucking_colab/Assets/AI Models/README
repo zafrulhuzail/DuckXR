@@ -1,0 +1,25 @@
+# DuckXR — Whisper model requirement
+
+This project requires an OpenAI Whisper Tiny model binary to be downloaded and placed locally before running any speech / transcription features.
+
+Download links (official):
+- Hugging Face Whisper models and data from https://huggingface.co/unity/inference-engine-whisper-tiny/tree/main/models (this is the tiny variant)
+- Additional Hugging Face Whisper model data: https://huggingface.co/unity/inference-engine-whisper-tiny/tree/main/data 
+
+Recommended placement
+- Place the whisper model inside: ./AI Models/models
+- Place the vocab.json inside: ./AI Models/data
+
+Usage notes
+- Whisper model needs to be assigned to the RunWhisper.cs fields accordingly
+
+Additionally, install Sentis package by adding this in package.json or from unity itself: 
+
+    "com.unity.sentis": {
+      "version": "file:com.unity.sentis",
+      "depth": 0,
+      "source": "embedded",
+      "dependencies": {
+        "com.unity.ai.inference": "2.2.1"
+      }
+    }
