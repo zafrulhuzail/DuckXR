@@ -27324,13 +27324,13 @@ MonoBehaviour:
   - {fileID: 1780529180}
   - {fileID: 1159610479}
   activeSlot: 2
-  audioClip: {fileID: 8300000, guid: 41a6a3ee236eca0498581c1cb8210d39, type: 3}
+  audioClip: {fileID: 8300000, guid: e0fbcd9ffeb69e441be0af8987238c38, type: 3}
   whisperText: {fileID: 0}
-  audioDecoder1: {fileID: 5022602860645237092, guid: 7e9ede046ebba3c4fbb3b8c1448258f6, type: 3}
-  audioDecoder2: {fileID: 5022602860645237092, guid: 6f8fc1bd1abbfc642962328d394ff11e, type: 3}
-  audioEncoder: {fileID: 5022602860645237092, guid: 6769b8119dbf26a43ae3ad45cfc216d4, type: 3}
-  logMelSpectro: {fileID: 5022602860645237092, guid: e1b7e19afaefc6145a9a61741d1eabf5, type: 3}
-  vocabAsset: {fileID: 4900000, guid: 07690a4d52446e24bb49dc4bbf0ff978, type: 3}
+  audioDecoder1: {fileID: 5022602860645237092, guid: 2693455b93be8f84c8a77aeefd21d928, type: 3}
+  audioDecoder2: {fileID: 5022602860645237092, guid: 037c52cf0e53868488e2dbedbf4c4f84, type: 3}
+  audioEncoder: {fileID: 5022602860645237092, guid: fd5dcb12a0c598843aa044a7ae426d2e, type: 3}
+  logMelSpectro: {fileID: 5022602860645237092, guid: 7622e369cced7994884f77807c361fc2, type: 3}
+  vocabAsset: {fileID: 4900000, guid: 1b2c52124904c3d49a3f1fd696118c91, type: 3}
 --- !u!4 &1814095421
 Transform:
   m_ObjectHideFlags: 0
