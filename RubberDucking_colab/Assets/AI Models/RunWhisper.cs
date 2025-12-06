@@ -6,6 +6,9 @@ using Unity.Collections;
 using Newtonsoft.Json;
 using TMPro;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using System.Text;
+using System.Text.RegularExpressions;
 public class RunWhisper : MonoBehaviour
 {
     Worker decoder1, decoder2, encoder, spectrogram;
@@ -68,6 +71,9 @@ public int activeSlot = 0;
     public ModelAsset audioDecoder1, audioDecoder2;
     public ModelAsset audioEncoder;
     public ModelAsset logMelSpectro;
+
+    private StringBuilder currentSentence = new StringBuilder();
+    private List<string> bulletPoints = new List<string>();
 
     public async void Start()
     {
@@ -306,17 +312,46 @@ public int activeSlot = 0;
         if (index == END_OF_TEXT)
         {
             transcribe = false;
-            Debug.Log("Whisper: " + outputString);
+
+            // Flush any unfinished sentence as a final bullet
+            if (currentSentence.Length > 0)
+            {
+                string chunk = CleanChunk(currentSentence.ToString());
+                if (!string.IsNullOrWhiteSpace(chunk))
+                    bulletPoints.Add("• " + chunk);
+
+                currentSentence.Clear();
+            }
+
+            // Show all bullets
             if (whisperText != null)
-            whisperText.text = outputString;   // show final text
+                whisperText.text = string.Join("\n", bulletPoints);
 
-
+            Debug.Log("Whisper bullets:\n" + whisperText.text);
         }
         else if (index < tokens.Length)
         {
-            outputString += GetUnicodeText(tokens[index]);
+            string tokenText = GetUnicodeText(tokens[index]);
+
+            // keep full raw text if you still need it
+            outputString += tokenText;
+
+            // build current sentence
+            currentSentence.Append(tokenText);
+
+            // did this token end a sentence?
+            if (Regex.IsMatch(tokenText, @"[.?!]"))
+            {
+                string chunk = CleanChunk(currentSentence.ToString());
+                if (!string.IsNullOrWhiteSpace(chunk))
+                    bulletPoints.Add("• " + chunk);
+
+                currentSentence.Clear();
+            }
+
+            // update UI with all bullets so far
             if (whisperText != null)
-            whisperText.text = outputString;   // show final text
+                whisperText.text = string.Join("\n", bulletPoints);
         }
 
         // Debug.Log(outputString);
@@ -376,4 +411,24 @@ public int activeSlot = 0;
         lastTokenTensor.Dispose();
         tokensTensor.Dispose();
     }
+    string CleanChunk(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        // collapse repeated spaces
+        text = Regex.Replace(text, @"\s+", " ");
+
+        // fix "word ," → "word,"
+        text = Regex.Replace(text, @"\s+([.,!?;:])", "$1");
+
+        text = text.Trim();
+
+        // Capitalize first letter
+        if (text.Length > 0)
+            text = char.ToUpper(text[0]) + text.Substring(1);
+
+        return text;
+    }
+
 }
