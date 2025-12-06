@@ -222,7 +222,7 @@ public int activeSlot = 0;
             return;
         }
 
-        string micName = Microphone.devices[0];
+        string micName = Microphone.devices[2];
 
         Debug.Log($"Recording from mic '{micName}' for {micRecordSeconds} seconds @ {sampleRate} Hz");
 
@@ -429,6 +429,19 @@ public int activeSlot = 0;
             text = char.ToUpper(text[0]) + text.Substring(1);
 
         return text;
+    }
+
+    public void TriggerRecordingFromInteraction()
+    {
+        if (!isRecording)
+        {
+            Debug.Log("TriggerRecordingFromInteraction called");
+            StartMicTranscription();
+        }
+        else
+        {
+            Debug.Log("Whisper is already recording, ignoring trigger.");
+        }
     }
 
 }
