@@ -1,113 +1,196 @@
+using System.Collections.Generic;
+
 using UnityEngine;
-using Unity.Sentis;
-using System.Linq;
 
-public class YoloDetector : MonoBehaviour
+using UnityEngine.XR.ARFoundation;
+
+using UnityEngine.XR.ARSubsystems;
+
+
+[RequireComponent(typeof(ARTrackedImageManager))]
+
+public class SmartImageSpawner : MonoBehaviour
+
 {
-    [Header("Model Settings")]
-    public ModelAsset modelAsset;
-    public Texture2D testImage;
+
+    [Header("Einstellungen")]
+
+    [Tooltip("Das Würfel-Prefab, das gespawnt werden soll.")]
+
+    public GameObject prefabToSpawn;
+
+
+    [Tooltip("Simulierter Threshold: Nur anzeigen, wenn Tracking perfekt ist.")]
+
+    public bool nurBeiPerfektemTracking = true;
+
+
+    // Referenz zum AR Manager
+
+    private ARTrackedImageManager _trackedImageManager;
+
     
-    [Header("Detection Settings")]
-    [Range(0.0f, 1.0f)] 
-    public float confidenceThreshold = 0.6f; 
 
-    [Header("Interaktion")]
-    public GameObject objectToSpawn; 
-    private GameObject currentSpawnedObject; 
+    // Wir speichern für jedes erkannte Bild den dazugehörigen Würfel
 
-    private Model runtimeModel;
-    private Worker worker;
-    private const int ImageSize = 640; 
-    private int numClasses = 80; 
-    private int numBoxes = 8400; 
-    
-    void Start()
+    private Dictionary<string, GameObject> _spawnedObjects = new Dictionary<string, GameObject>();
+
+
+    void Awake()
+
     {
-        if (modelAsset == null) return;
-        runtimeModel = ModelLoader.Load(modelAsset);
-        worker = new Worker(runtimeModel, BackendType.GPUCompute);
+
+        _trackedImageManager = GetComponent<ARTrackedImageManager>();
+
     }
 
-    void Update()
+
+    void OnEnable()
+
     {
-        if (Input.GetKeyDown(KeyCode.Space))
+
+        // Abonnieren der Events, wenn sich am Tracking etwas ändert
+
+        _trackedImageManager.trackedImagesChanged += OnTrackedImagesChanged;
+
+    }
+
+
+    void OnDisable()
+
+    {
+
+        // Abbestellen der Events
+
+        _trackedImageManager.trackedImagesChanged -= OnTrackedImagesChanged;
+
+    }
+
+
+    private void OnTrackedImagesChanged(ARTrackedImagesChangedEventArgs eventArgs)
+
+    {
+
+        // 1. Neue Bilder erkannt (ADDED)
+
+        foreach (var trackedImage in eventArgs.added)
+
         {
-            if (testImage != null) Detect(testImage);
-        }
-    }
 
-    public void Detect(Texture sourceTexture)
-    {
-        TensorShape shape = new TensorShape(1, 3, ImageSize, ImageSize);
-        using Tensor<float> inputTensor = new Tensor<float>(shape);
-        TextureConverter.ToTensor(sourceTexture, inputTensor, new TextureTransform().SetDimensions(width: ImageSize, height: ImageSize));
+            UpdateSpawnedObject(trackedImage);
 
-        worker.Schedule(inputTensor);
-
-        using Tensor<float> outputTensor = worker.PeekOutput("output0") as Tensor<float>;
-        float[] data = outputTensor.DownloadToArray();
-        
-        ParseYoloOutput(data);
-    }
-
-    void ParseYoloOutput(float[] data)
-    {
-        float maxScore = 0f;
-        int bestBoxIndex = -1;
-
-        for (int i = 0; i < numBoxes; i++)
-        {
-            for (int c = 0; c < numClasses; c++)
-            {
-                float score = data[(4 + c) * numBoxes + i];
-                
-                if (score < confidenceThreshold) continue; 
-
-                if (score > maxScore)
-                {
-                    maxScore = score;
-                    bestBoxIndex = i;
-                }
-            }
         }
 
-        if (bestBoxIndex != -1)
+
+        // 2. Bestehende Bilder aktualisiert (UPDATED - Position hat sich geändert)
+
+        foreach (var trackedImage in eventArgs.updated)
+
         {
-            Debug.Log($"Objekt erkannt! Sicherheit: {maxScore * 100:0}%");
+
+            UpdateSpawnedObject(trackedImage);
+
+        }
+
+
+        // 3. Bilder verloren (REMOVED)
+
+        foreach (var trackedImage in eventArgs.removed)
+
+        {
+
+            DestroySpawnedObject(trackedImage.referenceImage.name);
+
+        }
+
+    }
+
+
+    private void UpdateSpawnedObject(ARTrackedImage trackedImage)
+
+    {
+
+        string imageName = trackedImage.referenceImage.name;
+
+
+        // Logik für den Threshold / Genauigkeit
+
+        // ARFoundation nutzt 'TrackingState'. 
+
+        // 'Tracking' = Hohe Genauigkeit (entspricht > 0.6)
+
+        // 'Limited' = Schlechte Genauigkeit / Unsicher (entspricht < 0.6)
+
+        bool isTrackingReliable = trackedImage.trackingState == TrackingState.Tracking;
+
+
+        // Wenn wir noch keinen Würfel für dieses Bild haben, erstellen wir einen
+
+        if (!_spawnedObjects.ContainsKey(imageName))
+
+        {
+
+            // Erstelle den Würfel
+
+            GameObject newObject = Instantiate(prefabToSpawn, trackedImage.transform.position, trackedImage.transform.rotation);
+
             
-            float x = data[0 * numBoxes + bestBoxIndex];
-            float y = data[1 * numBoxes + bestBoxIndex];
+
+            // Mache den Würfel zu einem Kind des TrackedImage, damit er sich automatisch mitbewegt
+
+            // (Alternativ kann man das Parenting weglassen und Position manuell setzen, Parenting ist aber performanter)
+
+            newObject.transform.parent = trackedImage.transform;
+
             
-            // HIER WAR DER FEHLER: Jetzt sauber getrennt
-            float normalizedX = x / ImageSize;
-            float normalizedY = 1.0f - (y / ImageSize); 
 
-            PlaceObject(normalizedX, normalizedY);
+            _spawnedObjects.Add(imageName, newObject);
+
         }
-    }
 
-    void PlaceObject(float xPercent, float yPercent)
-    {
-        Vector3 screenPos = new Vector3(xPercent * Screen.width, yPercent * Screen.height, 0);
-        Ray ray = Camera.main.ScreenPointToRay(screenPos);
-        
-        Vector3 finalPos;
-        if (Physics.Raycast(ray, out RaycastHit hit)) finalPos = hit.point; 
-        else finalPos = ray.GetPoint(1.0f); 
 
-        if (currentSpawnedObject == null && objectToSpawn != null)
+        GameObject currentObject = _spawnedObjects[imageName];
+
+
+        // Sichtbarkeit steuern basierend auf dem "Threshold" (TrackingState)
+
+        if (nurBeiPerfektemTracking)
+
         {
-            currentSpawnedObject = Instantiate(objectToSpawn, finalPos, Quaternion.identity);
+
+            // Zeige Würfel nur, wenn Tracking absolut sicher ist
+
+            currentObject.SetActive(isTrackingReliable);
+
         }
-        else if (currentSpawnedObject != null)
+
+        else
+
         {
-            currentSpawnedObject.transform.position = finalPos;
+
+            // Zeige Würfel auch bei "Limited" Tracking (etwas wackeliger)
+
+            currentObject.SetActive(trackedImage.trackingState != TrackingState.None);
+
         }
+
     }
 
-    private void OnDestroy()
+
+    private void DestroySpawnedObject(string imageName)
+
     {
-        worker?.Dispose();
+
+        if (_spawnedObjects.ContainsKey(imageName))
+
+        {
+
+            Destroy(_spawnedObjects[imageName]);
+
+            _spawnedObjects.Remove(imageName);
+
+        }
+
     }
-}
+
+} 
