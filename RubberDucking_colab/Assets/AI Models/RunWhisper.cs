@@ -222,7 +222,7 @@ public int activeSlot = 0;
             return;
         }
 
-        string micName = Microphone.devices[2];
+        string micName = Microphone.devices[0];
 
         Debug.Log($"Recording from mic '{micName}' for {micRecordSeconds} seconds @ {sampleRate} Hz");
 
