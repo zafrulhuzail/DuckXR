@@ -54,8 +54,8 @@ MonoBehaviour:
   dontDestroyOnLoad: 1
   contextSize: 8192
   batchSize: 512
-  model: Qwen3-0.6B-Q4_K_M.gguf
-  chatTemplate: qwen3
+  model: DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf
+  chatTemplate: chatml
   lora: 
   loraWeights: 
   flashAttention: 0
@@ -65,9 +65,9 @@ MonoBehaviour:
   SSLKey: 
   SSLKeyPath: 
   minContextLength: 0
-  maxContextLength: 40960
+  maxContextLength: 131072
   embeddingsOnly: 0
-  embeddingLength: 1024
+  embeddingLength: 1536
 --- !u!1 &3184873054009632314
 GameObject:
   m_ObjectHideFlags: 0
@@ -622,6 +622,7 @@ MonoBehaviour:
   originalText: 
   summaryText: 
   targetTag: SummaryZone
+  isTriggerActive: 0
 --- !u!1 &6803295683086836559
 GameObject:
   m_ObjectHideFlags: 0

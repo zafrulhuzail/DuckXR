@@ -20837,7 +20837,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 545, y: -553.69995}
+  m_AnchoredPosition: {x: 545, y: -177.9}
   m_SizeDelta: {x: 1060, y: 355.8}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!54 &2011796457
@@ -22151,6 +22151,22 @@ PrefabInstance:
         placed neatly on the steps he had just come down. Had he past them without
         seeing them? It didn't seem possible. He was about to turn and be on his
         way when a deep chill filled his body.
+      objectReference: {fileID: 0}
+    - target: {fileID: 3688947214124033584, guid: 8eeb93cf26ce93d48b38b297d5a39de7, type: 3}
+      propertyPath: model
+      value: DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf
+      objectReference: {fileID: 0}
+    - target: {fileID: 3688947214124033584, guid: 8eeb93cf26ce93d48b38b297d5a39de7, type: 3}
+      propertyPath: chatTemplate
+      value: chatml
+      objectReference: {fileID: 0}
+    - target: {fileID: 3688947214124033584, guid: 8eeb93cf26ce93d48b38b297d5a39de7, type: 3}
+      propertyPath: embeddingLength
+      value: 1536
+      objectReference: {fileID: 0}
+    - target: {fileID: 3688947214124033584, guid: 8eeb93cf26ce93d48b38b297d5a39de7, type: 3}
+      propertyPath: maxContextLength
+      value: 131072
       objectReference: {fileID: 0}
     - target: {fileID: 5438964311160254881, guid: 8eeb93cf26ce93d48b38b297d5a39de7, type: 3}
       propertyPath: m_Pivot.x

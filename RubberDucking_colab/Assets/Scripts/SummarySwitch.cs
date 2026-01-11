@@ -15,6 +15,8 @@ public class TextCollisionSwitcher : MonoBehaviour
     [Header("Collision")]
     public string targetTag = "SummaryZone";
 
+    public bool isTriggerActive = false;
+
     private void Start()
     {
         // Ensure original text is shown at start
@@ -23,6 +25,7 @@ public class TextCollisionSwitcher : MonoBehaviour
 
     private void OnTriggerEnter(Collider other)
     {
+        isTriggerActive = true;
         if (other.CompareTag(targetTag))
         {
             SwitchToSummary();
@@ -31,6 +34,7 @@ public class TextCollisionSwitcher : MonoBehaviour
 
     private void OnTriggerExit(Collider other)
     {
+        isTriggerActive = false;
         if (other.CompareTag(targetTag))
         {
             SwitchToOriginal();
