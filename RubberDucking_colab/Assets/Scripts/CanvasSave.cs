@@ -5,7 +5,7 @@ public class CameraCapture : MonoBehaviour
 {
     public int fileCounter;
     public KeyCode screenshotKey;
-    public Camera Camera;
+    public Camera captureCamera;
 
     private void LateUpdate()
     {
@@ -17,21 +17,35 @@ public class CameraCapture : MonoBehaviour
 
     public void Capture()
     {
-        RenderTexture activeRenderTexture = RenderTexture.active;
-        RenderTexture.active = Camera.targetTexture;
+        int width = Screen.width;
+        int height = Screen.height;
 
-        Camera.Render();
+        RenderTexture rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+        rt.antiAliasing = 1; // URP-safe
+        rt.Create();
 
-        Texture2D image = new Texture2D(Camera.targetTexture.width, Camera.targetTexture.height);
-        image.ReadPixels(new Rect(0, 0, Camera.targetTexture.width, Camera.targetTexture.height), 0, 0);
+        RenderTexture prevRT = RenderTexture.active;
+        captureCamera.targetTexture = rt;
+        RenderTexture.active = rt;
+
+        captureCamera.Render();
+
+        Texture2D image = new Texture2D(width, height, TextureFormat.RGB24, false);
+        image.ReadPixels(new Rect(0, 0, width, height), 0, 0);
         image.Apply();
-        RenderTexture.active = activeRenderTexture;
+
+        captureCamera.targetTexture = null;
+        RenderTexture.active = prevRT;
 
         byte[] bytes = image.EncodeToPNG();
         Destroy(image);
+        rt.Release();
+        Destroy(rt);
 
-        Debug.Log("Saved Camera Capture to: " + Application.dataPath);
-        File.WriteAllBytes(Application.dataPath + "/Backgrounds/" + fileCounter + ".png", bytes);
+        string path = Application.dataPath + "/" + fileCounter + ".png";
+        File.WriteAllBytes(path, bytes);
+        Debug.Log("Saved Camera Capture to: " + path);
+
         fileCounter++;
     }
 
