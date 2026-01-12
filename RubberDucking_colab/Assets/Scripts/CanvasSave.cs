@@ -42,7 +42,7 @@ public class CameraCapture : MonoBehaviour
         rt.Release();
         Destroy(rt);
 
-        string path = Application.dataPath + "/" + fileCounter + ".png";
+        string path = Application.persistentDataPath + "/" + fileCounter + ".png";
         File.WriteAllBytes(path, bytes);
         Debug.Log("Saved Camera Capture to: " + path);
 
