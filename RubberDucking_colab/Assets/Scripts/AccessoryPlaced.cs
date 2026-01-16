@@ -3,12 +3,23 @@ using UnityEngine;
 public class AccessoryPlaced : MonoBehaviour
 {
     public bool isPlaced = false;
+     [Header("Assign the Accessory Manager here")]
+    public AccessoryFinalizer accessoryManager;
 
     private void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Duck"))
         {
             isPlaced = true;
+            Debug.Log("Accessory placed on duck!");
+            if (accessoryManager != null)
+            {
+                if (accessoryManager != null)
+                {   
+                    Debug.Log("Notifying Accessory Manager to hide unplaced accessories.");
+                    accessoryManager.HideUnplacedAccessories();
+                }
+            }
         }
     }
 
