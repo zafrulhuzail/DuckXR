@@ -38,6 +38,6 @@ public class DoubleTapFromInteractable : MonoBehaviour
         {
             Debug.LogWarning("DoubleTapFromInteractable: Whisper reference not set.");
         }
-        transform.localScale *= 1.2f;
+        
     }
 }
