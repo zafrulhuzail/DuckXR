@@ -26,6 +26,20 @@ public class DoubleTapFromInteractable : MonoBehaviour
         }
     }
 
+    public void OnFirstTap()
+    {
+        Debug.Log($"Double tap on {gameObject.name}");
+        
+        if (whisper != null)
+        {
+            whisper.TriggerRecordingFromInteraction();
+        }
+        else
+        {
+            Debug.LogWarning("DoubleTapFromInteractable: Whisper reference not set.");
+        }
+        
+    }
     void OnDoubleTap()
     {
         Debug.Log($"Double tap on {gameObject.name}");

@@ -18,6 +18,7 @@ public class AccessoryFinalizer : MonoBehaviour
                 accessory.gameObject.SetActive(false);
                 // Or Destroy(accessory.gameObject);
             }
+            // accessory.gameObject.SetActive(false);
         }
     }
 }

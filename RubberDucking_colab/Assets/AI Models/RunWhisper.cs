@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using TMPro;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
+using System;
 
 public class RunWhisper : MonoBehaviour
 {
@@ -67,7 +68,9 @@ public class RunWhisper : MonoBehaviour
     Tensor<float> encodedAudio;
 
     bool transcribe = false;
-    string outputString = "";
+    // string outputString = "";
+    public string outputString { get; private set; } = "";
+    public event Action<string> OnTranscriptionFinished;
 
     // Maximum size of audioClip (30s at 16kHz)
     const int maxSamples = 30 * 16000;
@@ -398,11 +401,15 @@ public class RunWhisper : MonoBehaviour
         {
             transcribe = false;
 
+            // string finalTranscript = outputString;
+            // OnTranscriptionFinished?.Invoke(finalTranscript);
+
             if (currentSentence.Length > 0)
             {
                 string chunk = CleanChunk(currentSentence.ToString());
                 if (!string.IsNullOrWhiteSpace(chunk))
-                    bulletPoints.Add("• " + chunk);
+                    // bulletPoints.Add("• " + chunk);
+                    bulletPoints.Add(chunk);
 
                 currentSentence.Clear();
             }
@@ -410,6 +417,8 @@ public class RunWhisper : MonoBehaviour
             if (whisperText != null)
                 whisperText.text = string.Join("\n", bulletPoints);
 
+            string finalTranscript = outputString;
+            OnTranscriptionFinished?.Invoke(finalTranscript);
             Debug.Log("Whisper bullets:\n" + (whisperText != null ? whisperText.text : "(no whisperText)"));
         }
         else if (index < tokens.Length)
@@ -423,7 +432,8 @@ public class RunWhisper : MonoBehaviour
             {
                 string chunk = CleanChunk(currentSentence.ToString());
                 if (!string.IsNullOrWhiteSpace(chunk))
-                    bulletPoints.Add("• " + chunk);
+                    // bulletPoints.Add("• " + chunk);
+                    bulletPoints.Add(chunk);
 
                 currentSentence.Clear();
             }
