@@ -34,6 +34,33 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         internal OVRSpatialAnchor m_spatialAnchor;
         private bool m_isHeadsetTracking;
 
+        private bool m_hasLatestPose;
+        private Vector3 m_latestPos;
+        private Quaternion m_latestRot;
+        private float m_latestPoseTime;
+        private const float PoseTimeout = 3f; // same idea as box persistence
+
+
+        private void OnEnable()
+        {
+            if (m_uiInference != null)
+                m_uiInference.OnDetectionPose.AddListener(OnDetectionPose);
+        }
+
+        private void OnDisable()
+        {
+            if (m_uiInference != null)
+                m_uiInference.OnDetectionPose.RemoveListener(OnDetectionPose);
+        }
+
+        private void OnDetectionPose(int classId, Vector3 pos, Quaternion rot)
+        {
+            m_hasLatestPose = true;
+            m_latestPos = pos;
+            m_latestRot = rot;
+            m_latestPoseTime = Time.time;
+        }
+
         private void Awake()
         {
             StartCoroutine(UpdateSpatialAnchor());
@@ -102,7 +129,7 @@ namespace PassthroughCameraSamples.MultiObjectDetection
 
             IEnumerator CreateSpatialAnchorAndSave()
             {
-                m_spatialAnchor = m_uiInference.ContentParent.gameObject.AddComponent<OVRSpatialAnchor>();
+                m_spatialAnchor = gameObject.AddComponent<OVRSpatialAnchor>();
 
                 // Wait for localization because SaveAnchorAsync() requires the anchor to be localized first.
                 while (true)
@@ -228,37 +255,24 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             {
                 return;
             }
+            const int SINGLE_SPHERE_KEY = 0;
 
-            var currentDetections = m_uiInference.m_boxDrawn;
-            const int SINGLE_SPHERE_KEY = 0; // Use a constant key for the single sphere
+            bool poseIsValid = m_hasLatestPose && (Time.time - m_latestPoseTime) <= PoseTimeout;
 
-            // Only track the first detected object (index 0)
-            if (currentDetections.Count > 0)
+            if (poseIsValid)
             {
-                var box = currentDetections[0]; // Get only the first detection
-                Vector3 worldPosition = box.BoxRectTransform.position;
-                Quaternion worldRotation = box.BoxRectTransform.rotation;
+                Vector3 worldPosition = m_latestPos;
+                Quaternion worldRotation = m_latestRot;
 
-                if (m_trackedSpheres.ContainsKey(SINGLE_SPHERE_KEY))
+                if (m_trackedSpheres.TryGetValue(SINGLE_SPHERE_KEY, out var sphere) && sphere != null)
                 {
-                    // Update existing sphere position
-                    var sphere = m_trackedSpheres[SINGLE_SPHERE_KEY];
-                    if (sphere != null)
-                    {
-                        sphere.transform.position = worldPosition;
-                        sphere.transform.rotation = worldRotation;
-                    }
-                    else
-                    {
-                        // Sphere was destroyed, remove from dictionary
-                        m_trackedSpheres.Remove(SINGLE_SPHERE_KEY);
-                    }
+                    sphere.transform.SetPositionAndRotation(worldPosition, worldRotation);
                 }
                 else
                 {
-                    // Create new sphere at detected position
-                    var sphere = Instantiate(m_spherePrefab, worldPosition, worldRotation, m_uiInference.ContentParent);
-                    m_trackedSpheres[SINGLE_SPHERE_KEY] = sphere;
+                    m_spherePrefab.SetActive(true);
+                    m_spherePrefab.transform.SetPositionAndRotation(worldPosition, worldRotation);
+                    m_trackedSpheres[SINGLE_SPHERE_KEY] = m_spherePrefab;
                 }
             }
             else
@@ -268,7 +282,7 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                 {
                     if (m_trackedSpheres[SINGLE_SPHERE_KEY] != null)
                     {
-                        Destroy(m_trackedSpheres[SINGLE_SPHERE_KEY]);
+                        m_trackedSpheres[SINGLE_SPHERE_KEY].SetActive(false);
                     }
                     m_trackedSpheres.Remove(SINGLE_SPHERE_KEY);
                 }
