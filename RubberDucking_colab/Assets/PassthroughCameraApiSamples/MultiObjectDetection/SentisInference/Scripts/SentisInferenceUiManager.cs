@@ -22,6 +22,13 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         [Space(10)]
         public UnityEvent<int> OnObjectsDetected;
 
+        [System.Serializable]
+        public class DetectionPoseEvent : UnityEvent<int, Vector3, Quaternion> { }
+
+        // classId, worldPosition, worldRotation
+        public DetectionPoseEvent OnDetectionPose;
+
+
         internal readonly List<BoundingBoxData> m_boxDrawn = new();
         private string[] m_labels;
         private readonly List<BoundingBoxData> m_boxPool = new();
@@ -34,7 +41,11 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             public float lastUpdateTime;
         }
 
-        private void Awake() => m_detectionBoxPrefab.gameObject.SetActive(false);
+        private void Awake()
+        {
+            if (m_detectionBoxPrefab != null)
+                m_detectionBoxPrefab.gameObject.SetActive(false);
+        }
 
         private void Update()
         {
@@ -100,6 +111,8 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                 float distance = worldPos.HasValue ? Vector3.Distance(cameraPose.position, worldPos.Value) : 1f;
                 var worldSpaceCenter = m_cameraAccess.ViewportPointToRay(normRect.center, cameraPose).GetPoint(distance);
                 var normal = (worldSpaceCenter - cameraPose.position).normalized;
+                var worldRot = Quaternion.LookRotation(normal);
+                OnDetectionPose?.Invoke(detection.classId, worldSpaceCenter, worldRot); 
 
                 // Intersect corner rays with the plane perpendicular to the camera view
                 var plane = new Plane(normal, worldSpaceCenter);
@@ -116,6 +129,11 @@ namespace PassthroughCameraSamples.MultiObjectDetection
                 var size = new Vector2(
                     Mathf.Abs(bottomRightLocal.x - topLeftLocal.x),
                     Mathf.Abs(bottomRightLocal.y - topLeftLocal.y));
+
+                if (m_detectionBoxPrefab == null)
+                {
+                    continue;
+                }
 
                 var boxData = GetOrCreateBoundingBoxData(detection.classId, worldSpaceCenter, size);
                 var boxRectTransform = boxData.BoxRectTransform;
