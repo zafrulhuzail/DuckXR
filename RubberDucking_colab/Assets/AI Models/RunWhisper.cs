@@ -8,7 +8,6 @@ using TMPro;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using System;
-using System.Threading;
 
 public class RunWhisper : MonoBehaviour
 {
@@ -24,7 +23,6 @@ public class RunWhisper : MonoBehaviour
 
     [Header("Recording Control")]
     public KeyCode recordKey = KeyCode.R;       // press R to start recording
-    public KeyCode stopKey = KeyCode.S;
     private bool isRecording = false;           // internal safety to prevent double calls
 
     [Header("Spawn Draft Each Recording (NEW)")]
@@ -44,19 +42,9 @@ public class RunWhisper : MonoBehaviour
 
     // This is the TMP we write into (set per recording when Draft spawns)
     public TMP_Text whisperText;
-    CancellationTokenSource micCTS;
 
-    // ===== PERF: "Process first, update only at the end" =====
-    [Header("UI Mode")]
-    [Tooltip("If true: do NOT update TMP during decoding. Text is set once when transcription finishes.")]
-    public bool updateOnlyAtEnd = true;
-
-    // ===== PERF: avoid per-token allocations =====
-    private readonly StringBuilder outputSb = new StringBuilder(8192);        // full transcript
-    private readonly StringBuilder currentSentence = new StringBuilder(512);  // current partial sentence
-    private readonly StringBuilder bulletsSb = new StringBuilder(4096);       // finalized lines
-
-    const int maxTokens = 448;
+    // This is how many tokens you want. It can be adjusted.
+    const int maxTokens = 100;
 
     // Special tokens
     const int END_OF_TEXT = 50257;
@@ -80,6 +68,7 @@ public class RunWhisper : MonoBehaviour
     Tensor<float> encodedAudio;
 
     bool transcribe = false;
+    // string outputString = "";
     public string outputString { get; private set; } = "";
     public event Action<string> OnTranscriptionFinished;
 
@@ -89,6 +78,9 @@ public class RunWhisper : MonoBehaviour
     public ModelAsset audioDecoder1, audioDecoder2;
     public ModelAsset audioEncoder;
     public ModelAsset logMelSpectro;
+
+    private StringBuilder currentSentence = new StringBuilder();
+    private List<string> bulletPoints = new List<string>();
 
     Awaitable m_Awaitable;
 
@@ -102,8 +94,14 @@ public class RunWhisper : MonoBehaviour
 
     public async void Start()
     {
+        if (audioClip != null)
+        {
+            Debug.Log($"Clip: {audioClip.name}, length: {audioClip.length:F2}s, freq: {audioClip.frequency} Hz, channels: {audioClip.channels}");
+        }
+        Debug.Log("Unity microphones: " + string.Join(", ", Microphone.devices));
+
         currentSlot = CurrentTextSlot;
-        whisperText = currentSlot;
+        whisperText = currentSlot; 
 
         SetupWhiteSpaceShifts();
         GetTokens();
@@ -133,13 +131,13 @@ public class RunWhisper : MonoBehaviour
 
     private void Update()
     {
+        // Only refresh fallback slot reference (DO NOT overwrite whisperText every frame)
         currentSlot = CurrentTextSlot;
 
         if (Input.GetKeyDown(recordKey) && !isRecording)
+        {
             StartMicTranscription();
-
-        if (Input.GetKeyDown(stopKey) && isRecording)
-            StopRecordingEarly();
+        }
     }
 
     TMP_Text CurrentTextSlot
@@ -169,9 +167,6 @@ public class RunWhisper : MonoBehaviour
 
         GameObject draftInstance = Instantiate(draftPrefab, draftParent);
         draftInstance.transform.SetAsFirstSibling(); // put at top of list
-        draftInstance.transform.localPosition = Vector3.zero;
-        draftInstance.transform.localRotation = Quaternion.identity;
-        draftInstance.transform.localScale = Vector3.one;
         draftInstance.name = draftPrefab.name;
 
         // Try by child name first (works if TMP object name is consistent)
@@ -231,16 +226,15 @@ public class RunWhisper : MonoBehaviour
         {
             // Fallback to existing slot if draft prefab isn't configured
             if (whisperText == null)
-            whisperText = currentSlot;
+                whisperText = currentSlot;
         }
 
-        // if (whisperText != null)
-        //     whisperText.text = useMicrophone ? "Listening..." : "Processing...";
+        if (whisperText != null)
+            whisperText.text = "Listening...";
 
         // Reset per-session state
-        outputSb.Clear();
         outputString = "";
-        bulletsSb.Clear();
+        bulletPoints.Clear();
         currentSentence.Clear();
 
         // Reset token prefix for this session
@@ -267,9 +261,6 @@ public class RunWhisper : MonoBehaviour
             }
             LoadAudio(audioClip);
         }
-
-        // if (whisperText != null)
-        //     whisperText.text = "Transcribing...";
 
         EncodeAudio();
         transcribe = true;
@@ -326,40 +317,17 @@ public class RunWhisper : MonoBehaviour
         string micName = Microphone.devices[0];
         Debug.Log($"Recording from mic '{micName}' for {micRecordSeconds} seconds @ {sampleRate} Hz");
 
-        micCTS?.Dispose();
-        micCTS = new CancellationTokenSource();
+        if (whisperText != null)
+            whisperText.text = "Listening...";
 
         micClip = Microphone.Start(micName, false, micRecordSeconds, sampleRate);
 
         while (Microphone.GetPosition(micName) <= 0) { }
+        await Task.Delay(micRecordSeconds * 1000);
 
-        bool stoppedEarly = false;
-        try
-        {
-            await Task.Delay(micRecordSeconds * 1000, micCTS.Token);
-        }
-        catch (TaskCanceledException)
-        {
-            stoppedEarly = true;
-            Debug.Log("Microphone recording stopped early.");
-        }
-        finally
-        {
-            Microphone.End(micName);
-        }
+        Microphone.End(micName);
 
         LoadAudio(micClip);
-
-        // if (whisperText != null)
-        //     whisperText.text = stoppedEarly ? "Transcribing (stopped early)..." : "Transcribing...";
-    }
-
-    public void StopRecordingEarly()
-    {
-        if (micCTS != null && !micCTS.IsCancellationRequested)
-        {
-            micCTS.Cancel();
-        }
     }
 
     void EncodeAudio()
@@ -433,61 +401,48 @@ public class RunWhisper : MonoBehaviour
         {
             transcribe = false;
 
-            // Finalize any remaining partial sentence
-            FinalizeCurrentSentenceToBullets();
+            // string finalTranscript = outputString;
+            // OnTranscriptionFinished?.Invoke(finalTranscript);
 
-            // Build final output once
-            outputString = outputSb.ToString();
-
-            
-            if (whisperText != null)
+            if (currentSentence.Length > 0)
             {
-               
-                whisperText.SetText(bulletsSb);
+                string chunk = CleanChunk(currentSentence.ToString());
+                if (!string.IsNullOrWhiteSpace(chunk))
+                    // bulletPoints.Add("• " + chunk);
+                    bulletPoints.Add(chunk);
 
+                currentSentence.Clear();
             }
 
-            OnTranscriptionFinished?.Invoke(outputString);
+            if (whisperText != null)
+                whisperText.text = string.Join("\n", bulletPoints);
+
+            string finalTranscript = outputString;
+            OnTranscriptionFinished?.Invoke(finalTranscript);
+            Debug.Log("Whisper bullets:\n" + (whisperText != null ? whisperText.text : "(no whisperText)"));
         }
         else if (index < tokens.Length)
         {
             string tokenText = GetUnicodeText(tokens[index]);
 
-            // Keep processing in memory only (NO TMP updates here)
-            outputSb.Append(tokenText);
+            outputString += tokenText;
             currentSentence.Append(tokenText);
 
-            // Only use punctuation to decide when to finalize a bullet line
-            if (HasSentencePunctuation(tokenText))
+            if (Regex.IsMatch(tokenText, @"[.?!]"))
             {
-                FinalizeCurrentSentenceToBullets();
+                string chunk = CleanChunk(currentSentence.ToString());
+                if (!string.IsNullOrWhiteSpace(chunk))
+                    // bulletPoints.Add("• " + chunk);
+                    bulletPoints.Add(chunk);
+
+                currentSentence.Clear();
             }
-        }
-    }
 
-    void FinalizeCurrentSentenceToBullets()
-    {
-        if (currentSentence.Length <= 0) return;
-
-        string chunk = CleanChunk(currentSentence.ToString());
-        if (!string.IsNullOrWhiteSpace(chunk))
-        {
-            if (bulletsSb.Length > 0) bulletsSb.Append('\n');
-            bulletsSb.Append(chunk);
+            if (whisperText != null)
+                whisperText.text = string.Join("\n", bulletPoints);
         }
 
-        currentSentence.Clear();
-    }
-
-    static bool HasSentencePunctuation(string s)
-    {
-        for (int i = 0; i < s.Length; i++)
-        {
-            char c = s[i];
-            if (c == '.' || c == '?' || c == '!')
-                return true;
-        }
-        return false;
+        Debug.Log("Whisper: " + outputString);
     }
 
     // Tokenizer
@@ -507,15 +462,12 @@ public class RunWhisper : MonoBehaviour
 
     string ShiftCharacterDown(string text)
     {
-        if (string.IsNullOrEmpty(text))
-            return string.Empty;
-
-        var sb = new StringBuilder(text.Length);
+        string outText = "";
         foreach (char letter in text)
         {
-            sb.Append(((int)letter <= 256) ? letter : (char)whiteSpaceCharacters[(int)(letter - 256)]);
+            outText += ((int)letter <= 256) ? letter : (char)whiteSpaceCharacters[(int)(letter - 256)];
         }
-        return sb.ToString();
+        return outText;
     }
 
     void SetupWhiteSpaceShifts()
@@ -571,18 +523,5 @@ public class RunWhisper : MonoBehaviour
 
         if (outputTokens.IsCreated)
             outputTokens.Dispose();
-
-        micCTS?.Dispose();
     }
-
-    private void OnEnable()
-    {
-        WhisperStopSignal.StopRequested += StopRecordingEarly;
-    }
-
-    private void OnDisable()
-    {
-        WhisperStopSignal.StopRequested -= StopRecordingEarly;
-    }
-
 }
