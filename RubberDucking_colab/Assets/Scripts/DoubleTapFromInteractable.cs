@@ -47,6 +47,7 @@ public class DoubleTapFromInteractable : MonoBehaviour
         if (whisper != null)
         {
             whisper.TriggerRecordingFromInteraction();
+            whisper.GetComponents<EqualizerIdle>()[0].ActivateAnimation();
         }
         else
         {
