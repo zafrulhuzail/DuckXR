@@ -24,6 +24,10 @@ namespace PassthroughCameraSamples.MultiObjectDetection
         [SerializeField, Range(0, 1)] private float m_iouThreshold = 0.6f;
         [SerializeField, Range(0, 1)] private float m_scoreThreshold = 0.23f;
 
+        [Header("Performance")]
+        [Tooltip("Wartezeit zwischen Scans in Sekunden. 0.1 = 10 Checks pro Sekunde.")]
+        [SerializeField] private float inferenceInterval = 0.1f; 
+
         [Header("UI display references")]
         [SerializeField] private SentisInferenceUiManager m_uiInference;
 
@@ -49,11 +53,20 @@ namespace PassthroughCameraSamples.MultiObjectDetection
 
             while (true)
             {
+                
                 while (m_uiMenuManager.IsPaused)
                 {
                     yield return null;
                 }
+
+                
                 yield return RunInference();
+
+                
+                if (inferenceInterval > 0)
+                {
+                    yield return new WaitForSeconds(inferenceInterval);
+                }
             }
         }
 
@@ -74,7 +87,7 @@ namespace PassthroughCameraSamples.MultiObjectDetection
             // Create engine to run model
             using var worker = new Worker(model, BackendType.CPU);
 
-            // Run inference with an empty image to load the model in the memory. The first inference blocks the main thread for a long time, so we're doing it on the app launch
+            // Run inference with an empty image to load the model in the memory. 
             Texture tempTexture = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             var textureTransform = new TextureTransform().SetDimensions(tempTexture.width, tempTexture.height, 3);
             using var input = new Tensor<float>(new TensorShape(1, 3, inputShape.Get(2), inputShape.Get(3)));
