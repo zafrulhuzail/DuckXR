@@ -27,7 +27,7 @@ public class DuckNameManager : MonoBehaviour
 
     void HandleWhisperFinished(string text)
     {
-        duckName = text.Trim();
+        duckName = text.Trim().TrimEnd('.');
 
         Debug.Log("DUCK NAME SET TO: " + duckName);
 

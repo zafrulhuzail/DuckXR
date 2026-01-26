@@ -1,6 +1,5 @@
 using UnityEngine;
 using TMPro;
-using System;
 
 public class UserNameManager : MonoBehaviour
 {
@@ -26,7 +25,7 @@ public class UserNameManager : MonoBehaviour
 
     void HandleWhisperFinished(string text)
     {
-        userName = text.Trim();
+        userName = text.Trim().TrimEnd('.');
 
         Debug.Log("USERNAME SET TO: " + userName);
 
