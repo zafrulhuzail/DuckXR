@@ -5,6 +5,7 @@ using UnityEngine.Events;
 public class VoiceControl : MonoBehaviour
 {
     [Header("Key Press Events")]
+    public bool enableKeyboardTesting = true;
     public UnityEvent OnKey1Pressed;
     public UnityEvent OnKey2Pressed;
     public UnityEvent OnKey3Pressed;
@@ -13,6 +14,9 @@ public class VoiceControl : MonoBehaviour
 
     void Update()
     {
+        if (!enableKeyboardTesting)
+            return;
+
         if (Input.GetKeyDown(KeyCode.Alpha1))
             OnKey1Pressed?.Invoke();
 

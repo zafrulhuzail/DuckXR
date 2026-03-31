@@ -12,6 +12,19 @@ public class ScreenFlowManager : MonoBehaviour
         ShowScreen(0);
     }
 
+    public void ShowScreenForTesting(int index)
+    {
+        if (screens == null || screens.Length == 0)
+        {
+            Debug.LogWarning("ScreenFlowManager: no screens assigned.");
+            return;
+        }
+
+        index = Mathf.Clamp(index, 0, screens.Length - 1);
+        currentScreenIndex = index;
+        ShowScreen(currentScreenIndex);
+    }
+
     /// <summary>
     /// Go to the next screen in the flow
     /// </summary>
