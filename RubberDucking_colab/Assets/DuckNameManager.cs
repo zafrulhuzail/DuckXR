@@ -28,12 +28,17 @@ public class DuckNameManager : MonoBehaviour
     void HandleWhisperFinished(string text)
     {
         duckName = text.Trim().TrimEnd('.');
+        SavedSessionService.SetDuckName(duckName);
 
         Debug.Log("DUCK NAME SET TO: " + duckName);
 
         if (nameText != null)
             nameText.text = "Hi, " + userNameManager.userName + "!\n" + duckName + " is a great name, thanks!";
+            
+        if (nameTagObject != null)
             nameTagObject.SetActive(true);
+            
+        if (animation != null)
             animation.SetActive(false);
     }
 }

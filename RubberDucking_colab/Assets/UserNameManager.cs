@@ -26,11 +26,14 @@ public class UserNameManager : MonoBehaviour
     void HandleWhisperFinished(string text)
     {
         userName = text.Trim().TrimEnd('.');
+        SavedSessionService.SetUserName(userName);
 
         Debug.Log("USERNAME SET TO: " + userName);
 
         if (nameText != null)
             nameText.text = "Nice to meet you, \n" + userName + "!";
+            
+        if (animation != null)
             animation.SetActive(false);
     }
 }

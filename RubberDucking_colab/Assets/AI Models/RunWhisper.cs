@@ -471,11 +471,10 @@ public class RunWhisper : MonoBehaviour
             
             if (whisperText != null)
             {
-               
                 whisperText.SetText(bulletsSb);
-
             }
 
+            SavedSessionService.AddTranscriptNote(outputString);
             OnTranscriptionFinished?.Invoke(outputString);
         }
         else if (index < tokens.Length)
