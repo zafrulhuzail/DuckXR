@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 public class TestingManager : MonoBehaviour
@@ -35,10 +36,14 @@ public class TestingManager : MonoBehaviour
     [SerializeField] private string fakeDuckName = "Ducky";
     [SerializeField] private bool autoTriggerWhisper = false;
 
-    private void Start()
+    private IEnumerator Start()
     {
         if (!enableTesting || testMode == TestMode.Off)
-            return;
+            yield break;
+
+        // Let other scene Start() methods finish first, especially ScreenFlowManager.Start()
+        // which otherwise resets the screen back to index 0.
+        yield return null;
 
         ApplySeedData();
         ApplyMode();
