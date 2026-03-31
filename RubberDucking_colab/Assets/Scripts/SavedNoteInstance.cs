@@ -28,7 +28,7 @@ public class SavedNoteInstance : MonoBehaviour
         if (note.localRotationEuler != null)
             transform.localEulerAngles = new Vector3(note.localRotationEuler.x, note.localRotationEuler.y, note.localRotationEuler.z);
 
-        if (note.localScale != null)
-            transform.localScale = new Vector3(note.localScale.x, note.localScale.y, note.localScale.z);
+        // Keep the prefab's authored scale so restored notes stay readable.
+        // We intentionally do not overwrite localScale from saved data here.
     }
 }
