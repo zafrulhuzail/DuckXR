@@ -476,7 +476,16 @@ public class RunWhisper : MonoBehaviour
                 whisperText.SetText(bulletsSb);
             }
 
-            SavedSessionService.AddTranscriptNote(outputString, currentDraftInstance != null ? currentDraftInstance.transform : null);
+            var savedNote = SavedSessionService.AddTranscriptNote(outputString, currentDraftInstance != null ? currentDraftInstance.transform : null);
+            if (savedNote != null && currentDraftInstance != null)
+            {
+                var noteInstance = currentDraftInstance.GetComponent<SavedNoteInstance>();
+                if (noteInstance == null)
+                    noteInstance = currentDraftInstance.AddComponent<SavedNoteInstance>();
+
+                noteInstance.noteId = savedNote.id;
+            }
+
             OnTranscriptionFinished?.Invoke(outputString);
         }
         else if (index < tokens.Length)

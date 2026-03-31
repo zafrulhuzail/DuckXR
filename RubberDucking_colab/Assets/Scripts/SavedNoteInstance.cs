@@ -12,6 +12,12 @@ public class SavedNoteInstance : MonoBehaviour
         noteText = target;
     }
 
+    private void Awake()
+    {
+        if (GetComponent<SavedNoteAutosave>() == null)
+            gameObject.AddComponent<SavedNoteAutosave>();
+    }
+
     public void Apply(SavedTranscriptNote note)
     {
         if (note == null)

@@ -127,17 +127,26 @@ public static class SavedSessionService
             createdAtUtc = DateTime.UtcNow.ToString("o")
         };
 
-        if (noteTransform != null)
-        {
-            note.localPosition = SavedVector3Data.FromVector3(noteTransform.localPosition);
-            note.localRotationEuler = SavedVector3Data.FromVector3(noteTransform.localEulerAngles);
-            note.localScale = SavedVector3Data.FromVector3(noteTransform.localScale);
-            note.siblingIndex = noteTransform.GetSiblingIndex();
-        }
+        ApplyTransformData(note, noteTransform);
 
         session.notes.Add(note);
         SaveCurrentSession();
         return note;
+    }
+
+    public static bool UpdateNoteTransform(string noteId, Transform noteTransform)
+    {
+        if (string.IsNullOrWhiteSpace(noteId) || noteTransform == null)
+            return false;
+
+        var session = EnsureCurrentSession();
+        var note = session.notes.Find(n => n.id == noteId);
+        if (note == null)
+            return false;
+
+        ApplyTransformData(note, noteTransform);
+        SaveCurrentSession();
+        return true;
     }
 
     public static SavedSessionIndex LoadIndex()
@@ -234,6 +243,17 @@ public static class SavedSessionService
             title = string.IsNullOrWhiteSpace(title) ? "Untitled session" : title.Trim()
         };
         return session;
+    }
+
+    private static void ApplyTransformData(SavedTranscriptNote note, Transform noteTransform)
+    {
+        if (note == null || noteTransform == null)
+            return;
+
+        note.localPosition = SavedVector3Data.FromVector3(noteTransform.localPosition);
+        note.localRotationEuler = SavedVector3Data.FromVector3(noteTransform.localEulerAngles);
+        note.localScale = SavedVector3Data.FromVector3(noteTransform.localScale);
+        note.siblingIndex = noteTransform.GetSiblingIndex();
     }
 
     private static void UpsertSummary(SavedSessionData session)
