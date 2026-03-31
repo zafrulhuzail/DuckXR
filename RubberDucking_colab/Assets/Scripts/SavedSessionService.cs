@@ -164,6 +164,18 @@ public static class SavedSessionService
         }
     }
 
+    public static bool ResumeSession(string sessionId)
+    {
+        var loaded = LoadSession(sessionId);
+        if (loaded == null)
+            return false;
+
+        _currentSession = loaded;
+        SaveCurrentSession();
+        Debug.Log($"SavedSessionService: Resumed session {sessionId}");
+        return true;
+    }
+
     public static void SaveCurrentSession()
     {
         if (_currentSession == null)
