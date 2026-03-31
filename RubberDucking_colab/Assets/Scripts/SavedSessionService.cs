@@ -4,11 +4,28 @@ using System.IO;
 using UnityEngine;
 
 [Serializable]
+public class SavedVector3Data
+{
+    public float x;
+    public float y;
+    public float z;
+
+    public static SavedVector3Data FromVector3(Vector3 value)
+    {
+        return new SavedVector3Data { x = value.x, y = value.y, z = value.z };
+    }
+}
+
+[Serializable]
 public class SavedTranscriptNote
 {
     public string id;
     public string text;
     public string createdAtUtc;
+    public SavedVector3Data localPosition;
+    public SavedVector3Data localRotationEuler;
+    public SavedVector3Data localScale;
+    public int siblingIndex;
 }
 
 [Serializable]
@@ -96,7 +113,7 @@ public static class SavedSessionService
         SaveCurrentSession();
     }
 
-    public static SavedTranscriptNote AddTranscriptNote(string text)
+    public static SavedTranscriptNote AddTranscriptNote(string text, Transform noteTransform = null)
     {
         text = Sanitize(text);
         if (string.IsNullOrWhiteSpace(text))
@@ -109,6 +126,14 @@ public static class SavedSessionService
             text = text,
             createdAtUtc = DateTime.UtcNow.ToString("o")
         };
+
+        if (noteTransform != null)
+        {
+            note.localPosition = SavedVector3Data.FromVector3(noteTransform.localPosition);
+            note.localRotationEuler = SavedVector3Data.FromVector3(noteTransform.localEulerAngles);
+            note.localScale = SavedVector3Data.FromVector3(noteTransform.localScale);
+            note.siblingIndex = noteTransform.GetSiblingIndex();
+        }
 
         session.notes.Add(note);
         SaveCurrentSession();

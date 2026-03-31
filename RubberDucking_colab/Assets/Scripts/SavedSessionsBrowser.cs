@@ -3,6 +3,7 @@ using System.Text;
 using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
+using System.Collections.Generic;
 
 public class SavedSessionsBrowser : MonoBehaviour
 {
@@ -13,6 +14,12 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     [Header("Selection")]
     [SerializeField] private int selectedIndex = 0;
+
+    [Header("Restore")]
+    [SerializeField] private GameObject notePrefab;
+    [SerializeField] private Transform notesParent;
+    [SerializeField] private string noteTextChildName = "Transcription1";
+    [SerializeField] private bool clearExistingNotesOnResume = true;
 
     [Header("Events")]
     [SerializeField] private UnityEvent onSessionResumed;
@@ -73,6 +80,7 @@ public class SavedSessionsBrowser : MonoBehaviour
 
         if (SavedSessionService.ResumeSession(_selectedSession.id))
         {
+            RestoreNotes(_selectedSession);
             Debug.Log($"SavedSessionsBrowser: Resumed {_selectedSession.title}");
             onSessionResumed?.Invoke();
         }
@@ -148,6 +156,58 @@ public class SavedSessionsBrowser : MonoBehaviour
         }
 
         SetText(selectedNotesText, notes.ToString().TrimEnd());
+    }
+
+    private void RestoreNotes(SavedSessionData session)
+    {
+        if (session == null || notePrefab == null || notesParent == null)
+            return;
+
+        if (clearExistingNotesOnResume)
+        {
+            var toDestroy = new List<GameObject>();
+            for (int i = 0; i < notesParent.childCount; i++)
+            {
+                toDestroy.Add(notesParent.GetChild(i).gameObject);
+            }
+
+            foreach (var go in toDestroy)
+                Destroy(go);
+        }
+
+        foreach (var note in session.notes)
+        {
+            var instance = Instantiate(notePrefab, notesParent);
+            instance.name = notePrefab.name;
+
+            var noteInstance = instance.GetComponent<SavedNoteInstance>();
+            if (noteInstance == null)
+                noteInstance = instance.AddComponent<SavedNoteInstance>();
+
+            var tmp = FindNoteText(instance.transform);
+            if (tmp != null)
+                noteInstance.SetNoteTextTarget(tmp);
+
+            noteInstance.Apply(note);
+
+            if (note.siblingIndex >= 0 && note.siblingIndex < notesParent.childCount)
+                instance.transform.SetSiblingIndex(note.siblingIndex);
+        }
+    }
+
+    private TMP_Text FindNoteText(Transform root)
+    {
+        if (root == null)
+            return null;
+
+        if (!string.IsNullOrWhiteSpace(noteTextChildName))
+        {
+            var child = root.Find(noteTextChildName);
+            if (child != null)
+                return child.GetComponent<TMP_Text>();
+        }
+
+        return root.GetComponentInChildren<TMP_Text>(true);
     }
 
     private static string Fallback(string value)

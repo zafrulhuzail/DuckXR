@@ -161,6 +161,8 @@ public class RunWhisper : MonoBehaviour
         }
     }
 
+    private GameObject currentDraftInstance;
+
     TMP_Text SpawnDraftAndGetTMP()
     {
         if (draftPrefab == null || draftParent == null)
@@ -172,17 +174,17 @@ public class RunWhisper : MonoBehaviour
                 Destroy(draftParent.GetChild(i).gameObject);
         }
 
-        GameObject draftInstance = Instantiate(draftPrefab, draftParent);
-        draftInstance.transform.SetAsFirstSibling(); // put at top of list
-        draftInstance.transform.localPosition = Vector3.zero;
-        draftInstance.transform.localRotation = Quaternion.identity;
-        draftInstance.transform.localScale = Vector3.one;
-        draftInstance.name = draftPrefab.name;
+        currentDraftInstance = Instantiate(draftPrefab, draftParent);
+        currentDraftInstance.transform.SetAsFirstSibling(); // put at top of list
+        currentDraftInstance.transform.localPosition = Vector3.zero;
+        currentDraftInstance.transform.localRotation = Quaternion.identity;
+        currentDraftInstance.transform.localScale = Vector3.one;
+        currentDraftInstance.name = draftPrefab.name;
 
         // Try by child name first (works if TMP object name is consistent)
         if (!string.IsNullOrEmpty(tmpChildName))
         {
-            var t = draftInstance.transform.Find(tmpChildName);
+            var t = currentDraftInstance.transform.Find(tmpChildName);
             if (t != null)
             {
                 var tmp = t.GetComponent<TMP_Text>();
@@ -191,7 +193,7 @@ public class RunWhisper : MonoBehaviour
         }
 
         // Fallback: first TMP inside the Draft
-        var anyTmp = draftInstance.GetComponentInChildren<TMP_Text>(true);
+        var anyTmp = currentDraftInstance.GetComponentInChildren<TMP_Text>(true);
         return anyTmp;
     }
 
@@ -474,7 +476,7 @@ public class RunWhisper : MonoBehaviour
                 whisperText.SetText(bulletsSb);
             }
 
-            SavedSessionService.AddTranscriptNote(outputString);
+            SavedSessionService.AddTranscriptNote(outputString, currentDraftInstance != null ? currentDraftInstance.transform : null);
             OnTranscriptionFinished?.Invoke(outputString);
         }
         else if (index < tokens.Length)
