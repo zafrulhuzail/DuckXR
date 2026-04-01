@@ -412,25 +412,89 @@ public class SavedSessionsBrowser : MonoBehaviour
         CacheSlotBasePositions();
 
         bool scrollingDown = targetOffset > scrollOffset;
+        int count = visibleItems.Length;
+        if (count == 0)
+        {
+            _isAnimatingScroll = false;
+            yield break;
+        }
+
+        var startPositions = new Vector2[count];
+        var targetPositions = new Vector2[count];
+        var orderedItems = new SavedSessionListItemView[count];
+        Array.Copy(visibleItems, orderedItems, count);
+
+        Vector2 step = count > 1
+            ? (_slotBasePositions[1] - _slotBasePositions[0])
+            : new Vector2(0f, -Mathf.Abs(rowSpacing));
+
+        if (scrollingDown)
+        {
+            var recycled = orderedItems[0];
+            for (int i = 1; i < count; i++)
+            {
+                startPositions[i] = _slotBasePositions[i];
+                targetPositions[i] = _slotBasePositions[i - 1];
+            }
+
+            if (recycled != null)
+            {
+                int enteringIndex = targetOffset + count - 1;
+                if (enteringIndex < _index.sessions.Count)
+                {
+                    recycled.Bind(this, _index.sessions[enteringIndex], enteringIndex, enteringIndex == selectedIndex);
+                    startPositions[0] = _slotBasePositions[count - 1] + step;
+                    targetPositions[0] = _slotBasePositions[count - 1];
+                    recycled.SetAnchoredPosition(startPositions[0]);
+                }
+                else
+                {
+                    recycled.Clear();
+                }
+            }
+        }
+        else
+        {
+            var recycled = orderedItems[count - 1];
+            for (int i = 0; i < count - 1; i++)
+            {
+                startPositions[i] = _slotBasePositions[i];
+                targetPositions[i] = _slotBasePositions[i + 1];
+            }
+
+            if (recycled != null)
+            {
+                int enteringIndex = targetOffset;
+                if (enteringIndex >= 0)
+                {
+                    recycled.Bind(this, _index.sessions[enteringIndex], enteringIndex, enteringIndex == selectedIndex);
+                    startPositions[count - 1] = _slotBasePositions[0] - step;
+                    targetPositions[count - 1] = _slotBasePositions[0];
+                    recycled.SetAnchoredPosition(startPositions[count - 1]);
+                }
+                else
+                {
+                    recycled.Clear();
+                }
+            }
+        }
+
         float duration = Mathf.Max(0.01f, scrollAnimationDuration);
         float elapsed = 0f;
-        float signedOffset = scrollingDown ? rowSpacing : -rowSpacing;
 
         while (elapsed < duration)
         {
             elapsed += Time.unscaledDeltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
             float eased = Mathf.SmoothStep(0f, 1f, t);
-            float animatedYOffset = -signedOffset * eased;
 
-            for (int i = 0; i < visibleItems.Length; i++)
+            for (int i = 0; i < count; i++)
             {
-                var item = visibleItems[i];
-                if (item == null)
+                var item = orderedItems[i];
+                if (item == null || !item.gameObject.activeSelf)
                     continue;
 
-                var basePosition = i < _slotBasePositions.Length ? _slotBasePositions[i] : item.GetAnchoredPosition();
-                item.SetAnchoredPosition(basePosition + new Vector2(0f, animatedYOffset));
+                item.SetAnchoredPosition(Vector2.Lerp(startPositions[i], targetPositions[i], eased));
             }
 
             yield return null;
@@ -439,7 +503,7 @@ public class SavedSessionsBrowser : MonoBehaviour
         scrollOffset = targetOffset;
         RotateVisibleItems(scrollingDown);
         ResetVisibleItemPositions();
-        RenderVisibleItems();
+        RefreshVisibleItemBindings();
         RenderLegacyTextListIfNeeded();
         LoadSelected();
         RenderSelection();
@@ -484,6 +548,25 @@ public class SavedSessionsBrowser : MonoBehaviour
             for (int i = visibleItems.Length - 1; i > 0; i--)
                 visibleItems[i] = visibleItems[i - 1];
             visibleItems[0] = last;
+        }
+    }
+
+    private void RefreshVisibleItemBindings()
+    {
+        if (visibleItems == null || _index == null)
+            return;
+
+        for (int i = 0; i < visibleItems.Length; i++)
+        {
+            var item = visibleItems[i];
+            if (item == null)
+                continue;
+
+            int sessionIndex = scrollOffset + i;
+            if (sessionIndex >= 0 && sessionIndex < _index.sessions.Count)
+                item.Bind(this, _index.sessions[sessionIndex], sessionIndex, sessionIndex == selectedIndex);
+            else
+                item.Clear();
         }
     }
 
