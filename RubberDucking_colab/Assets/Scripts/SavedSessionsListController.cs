@@ -17,6 +17,14 @@ public class SavedSessionsListController : MonoBehaviour
         if (browser != null)
         {
             browser.Refresh();
+
+            if (outputText != null)
+            {
+                outputText.text = browser.SessionCount <= 0
+                    ? "No saved sessions yet."
+                    : $"{browser.SessionCount} saved sessions ready.";
+            }
+
             return;
         }
 
@@ -27,12 +35,8 @@ public class SavedSessionsListController : MonoBehaviour
             return;
         }
 
-        if (index.sessions.Count == 0)
-        {
-            outputText.text = "No saved sessions yet.";
-            return;
-        }
-
-        outputText.text = $"{index.sessions.Count} saved sessions loaded.";
+        outputText.text = index.sessions.Count == 0
+            ? "No saved sessions yet."
+            : $"{index.sessions.Count} saved sessions loaded.";
     }
 }
