@@ -5,6 +5,7 @@ using UnityEngine.UI;
 
 public class SavedSessionListItemView : MonoBehaviour
 {
+    private RectTransform _rectTransform;
     [Header("UI")]
     [SerializeField] private TMP_Text titleText;
     [SerializeField] private TMP_Text metaText;
@@ -30,6 +31,8 @@ public class SavedSessionListItemView : MonoBehaviour
 
     private void Awake()
     {
+        _rectTransform = transform as RectTransform;
+
         if (button != null)
         {
             button.onClick.RemoveListener(HandleClick);
@@ -74,6 +77,27 @@ public class SavedSessionListItemView : MonoBehaviour
         SetColor(titleText, selected ? selectedTextColor : unselectedTextColor);
         SetColor(metaText, selected ? selectedMetaColor : unselectedMetaColor);
         SetColor(previewText, selected ? selectedMetaColor : unselectedMetaColor);
+    }
+
+    public RectTransform RectTransform
+    {
+        get
+        {
+            if (_rectTransform == null)
+                _rectTransform = transform as RectTransform;
+            return _rectTransform;
+        }
+    }
+
+    public void SetAnchoredPosition(Vector2 position)
+    {
+        if (RectTransform != null)
+            RectTransform.anchoredPosition = position;
+    }
+
+    public Vector2 GetAnchoredPosition()
+    {
+        return RectTransform != null ? RectTransform.anchoredPosition : Vector2.zero;
     }
 
     public void TriggerSelect()

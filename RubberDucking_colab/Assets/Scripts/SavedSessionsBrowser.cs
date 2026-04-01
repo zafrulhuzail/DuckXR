@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Events;
 using System.Collections.Generic;
 using UnityEngine.UI;
+using System.Collections;
 
 public class SavedSessionsBrowser : MonoBehaviour
 {
@@ -20,6 +21,11 @@ public class SavedSessionsBrowser : MonoBehaviour
     [SerializeField] private Button scrollUpButton;
     [SerializeField] private Button scrollDownButton;
     [SerializeField] private bool showLegacyTextListWhenNoSlots = false;
+
+    [Header("Scroll Animation")]
+    [SerializeField] private bool animateScrolling = true;
+    [SerializeField] private float scrollAnimationDuration = 0.2f;
+    [SerializeField] private float rowSpacing = 120f;
 
     [Header("Selection")]
     [SerializeField] private int selectedIndex = 0;
@@ -43,6 +49,8 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     private SavedSessionIndex _index;
     private SavedSessionData _selectedSession;
+    private Vector2[] _slotBasePositions;
+    private bool _isAnimatingScroll;
 
     public int SessionCount => _index?.sessions?.Count ?? 0;
     public SavedSessionData SelectedSession => _selectedSession;
@@ -50,6 +58,7 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     private void OnEnable()
     {
+        CacheSlotBasePositions();
         Refresh();
     }
 
@@ -69,6 +78,7 @@ public class SavedSessionsBrowser : MonoBehaviour
             SetText(selectedSessionText, "No session selected.");
             SetText(selectedNotesText, string.Empty);
             ClearVisibleItems();
+            ResetVisibleItemPositions();
             UpdateScrollButtons();
             return;
         }
@@ -154,22 +164,40 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     public void ScrollUp()
     {
-        if (_index == null || _index.sessions.Count == 0)
+        if (_index == null || _index.sessions.Count == 0 || _isAnimatingScroll)
             return;
 
-        scrollOffset = Mathf.Max(0, scrollOffset - 1);
-        RenderList();
-        UpdateScrollButtons();
+        var targetOffset = Mathf.Max(0, scrollOffset - 1);
+        if (targetOffset == scrollOffset)
+            return;
+
+        if (ShouldAnimateSlots())
+            StartCoroutine(AnimateScrollToOffset(targetOffset));
+        else
+        {
+            scrollOffset = targetOffset;
+            RenderList();
+            UpdateScrollButtons();
+        }
     }
 
     public void ScrollDown()
     {
-        if (_index == null || _index.sessions.Count == 0)
+        if (_index == null || _index.sessions.Count == 0 || _isAnimatingScroll)
             return;
 
-        scrollOffset = Mathf.Min(GetMaxScrollOffset(), scrollOffset + 1);
-        RenderList();
-        UpdateScrollButtons();
+        var targetOffset = Mathf.Min(GetMaxScrollOffset(), scrollOffset + 1);
+        if (targetOffset == scrollOffset)
+            return;
+
+        if (ShouldAnimateSlots())
+            StartCoroutine(AnimateScrollToOffset(targetOffset));
+        else
+        {
+            scrollOffset = targetOffset;
+            RenderList();
+            UpdateScrollButtons();
+        }
     }
 
     public void ResumeSelected()
@@ -213,6 +241,9 @@ public class SavedSessionsBrowser : MonoBehaviour
     {
         if (visibleItems == null || visibleItems.Length == 0)
             return;
+
+        CacheSlotBasePositions();
+        ResetVisibleItemPositions();
 
         for (int i = 0; i < visibleItems.Length; i++)
         {
@@ -366,6 +397,88 @@ public class SavedSessionsBrowser : MonoBehaviour
             scrollOffset = selectedIndex - visibleCount + 1;
 
         ClampScrollOffset();
+    }
+
+    private bool ShouldAnimateSlots()
+    {
+        return animateScrolling && visibleItems != null && visibleItems.Length > 0 && rowSpacing > 0.001f && gameObject.activeInHierarchy;
+    }
+
+    private IEnumerator AnimateScrollToOffset(int targetOffset)
+    {
+        _isAnimatingScroll = true;
+        UpdateScrollButtons();
+        CacheSlotBasePositions();
+
+        float direction = targetOffset > scrollOffset ? 1f : -1f;
+        float distance = rowSpacing * direction;
+        float duration = Mathf.Max(0.01f, scrollAnimationDuration);
+        float elapsed = 0f;
+
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            float t = Mathf.Clamp01(elapsed / duration);
+            float eased = Mathf.SmoothStep(0f, 1f, t);
+            ApplyAnimatedOffset(-distance * eased);
+            yield return null;
+        }
+
+        scrollOffset = targetOffset;
+        ResetVisibleItemPositions();
+        LoadSelected();
+        RenderList();
+        RenderSelection();
+        _isAnimatingScroll = false;
+        UpdateScrollButtons();
+    }
+
+    private void ApplyAnimatedOffset(float yOffset)
+    {
+        if (visibleItems == null || _slotBasePositions == null)
+            return;
+
+        for (int i = 0; i < visibleItems.Length; i++)
+        {
+            var item = visibleItems[i];
+            if (item == null)
+                continue;
+
+            var basePosition = i < _slotBasePositions.Length ? _slotBasePositions[i] : item.GetAnchoredPosition();
+            item.SetAnchoredPosition(basePosition + new Vector2(0f, yOffset));
+        }
+    }
+
+    private void CacheSlotBasePositions()
+    {
+        if (visibleItems == null)
+        {
+            _slotBasePositions = Array.Empty<Vector2>();
+            return;
+        }
+
+        if (_slotBasePositions == null || _slotBasePositions.Length != visibleItems.Length)
+            _slotBasePositions = new Vector2[visibleItems.Length];
+
+        for (int i = 0; i < visibleItems.Length; i++)
+        {
+            var item = visibleItems[i];
+            if (item != null)
+                _slotBasePositions[i] = item.GetAnchoredPosition();
+        }
+    }
+
+    private void ResetVisibleItemPositions()
+    {
+        if (visibleItems == null || _slotBasePositions == null)
+            return;
+
+        for (int i = 0; i < visibleItems.Length; i++)
+        {
+            var item = visibleItems[i];
+            if (item != null && i < _slotBasePositions.Length)
+                item.SetAnchoredPosition(_slotBasePositions[i]);
+        }
     }
 
     private void ClampScrollOffset()
