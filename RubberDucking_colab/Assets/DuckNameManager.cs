@@ -29,6 +29,8 @@ public class DuckNameManager : MonoBehaviour
     {
         duckName = text.Trim().TrimEnd('.');
         SavedSessionService.SetDuckName(duckName);
+        PlayerPrefs.SetString("LastDuckName", duckName);
+        PlayerPrefs.Save();
 
         Debug.Log("DUCK NAME SET TO: " + duckName);
 

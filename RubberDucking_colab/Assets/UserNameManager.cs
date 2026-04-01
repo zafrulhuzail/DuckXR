@@ -27,6 +27,8 @@ public class UserNameManager : MonoBehaviour
     {
         userName = text.Trim().TrimEnd('.');
         SavedSessionService.SetUserName(userName);
+        PlayerPrefs.SetString("LastUserName", userName);
+        PlayerPrefs.Save();
 
         Debug.Log("USERNAME SET TO: " + userName);
 
