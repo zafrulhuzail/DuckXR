@@ -4,6 +4,7 @@ using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using System.Collections.Generic;
+using UnityEngine.UI;
 
 public class SavedSessionsBrowser : MonoBehaviour
 {
@@ -14,9 +15,16 @@ public class SavedSessionsBrowser : MonoBehaviour
     [SerializeField] private TMP_Text headerText;
     [SerializeField] private TMP_Text helperText;
 
+    [Header("Scrollable Slots")]
+    [SerializeField] private SavedSessionListItemView[] visibleItems;
+    [SerializeField] private Button scrollUpButton;
+    [SerializeField] private Button scrollDownButton;
+    [SerializeField] private bool showLegacyTextListWhenNoSlots = false;
+
     [Header("Selection")]
     [SerializeField] private int selectedIndex = 0;
     [SerializeField] private bool wrapSelection = true;
+    [SerializeField] private int scrollOffset = 0;
 
     [Header("Session Creation")]
     [SerializeField] private string newSessionTitle = "New session";
@@ -38,6 +46,7 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     public int SessionCount => _index?.sessions?.Count ?? 0;
     public SavedSessionData SelectedSession => _selectedSession;
+    public int VisibleItemCount => visibleItems == null ? 0 : visibleItems.Length;
 
     private void OnEnable()
     {
@@ -52,19 +61,25 @@ public class SavedSessionsBrowser : MonoBehaviour
         if (!hasSessions)
         {
             selectedIndex = 0;
+            scrollOffset = 0;
             _selectedSession = null;
             SetText(headerText, "Saved Sessions");
             SetText(helperText, "No saved sessions yet. Start a new one to begin.");
-            SetText(sessionsListText, "No saved sessions yet.");
+            SetText(sessionsListText, showLegacyTextListWhenNoSlots ? "No saved sessions yet." : string.Empty);
             SetText(selectedSessionText, "No session selected.");
             SetText(selectedNotesText, string.Empty);
+            ClearVisibleItems();
+            UpdateScrollButtons();
             return;
         }
 
         selectedIndex = Mathf.Clamp(selectedIndex, 0, _index.sessions.Count - 1);
+        ClampScrollOffset();
+        EnsureSelectionVisible();
         LoadSelected();
         RenderList();
         RenderSelection();
+        UpdateScrollButtons();
         onSelectionChanged?.Invoke();
     }
 
@@ -73,9 +88,11 @@ public class SavedSessionsBrowser : MonoBehaviour
         SavedSessionService.StartNewSession(newSessionTitle);
         _index = SavedSessionService.LoadIndex();
         selectedIndex = 0;
+        scrollOffset = 0;
         LoadSelected();
         RenderList();
         RenderSelection();
+        UpdateScrollButtons();
 
         if (clearPreviewWhenStartingNewSession)
             ClearSpawnedNotes();
@@ -95,9 +112,11 @@ public class SavedSessionsBrowser : MonoBehaviour
         else
             selectedIndex = Mathf.Min(selectedIndex + 1, _index.sessions.Count - 1);
 
+        EnsureSelectionVisible();
         LoadSelected();
         RenderList();
         RenderSelection();
+        UpdateScrollButtons();
         onSelectionChanged?.Invoke();
     }
 
@@ -111,9 +130,11 @@ public class SavedSessionsBrowser : MonoBehaviour
         else
             selectedIndex = Mathf.Max(selectedIndex - 1, 0);
 
+        EnsureSelectionVisible();
         LoadSelected();
         RenderList();
         RenderSelection();
+        UpdateScrollButtons();
         onSelectionChanged?.Invoke();
     }
 
@@ -123,10 +144,32 @@ public class SavedSessionsBrowser : MonoBehaviour
             return;
 
         selectedIndex = Mathf.Clamp(index, 0, _index.sessions.Count - 1);
+        EnsureSelectionVisible();
         LoadSelected();
         RenderList();
         RenderSelection();
+        UpdateScrollButtons();
         onSelectionChanged?.Invoke();
+    }
+
+    public void ScrollUp()
+    {
+        if (_index == null || _index.sessions.Count == 0)
+            return;
+
+        scrollOffset = Mathf.Max(0, scrollOffset - 1);
+        RenderList();
+        UpdateScrollButtons();
+    }
+
+    public void ScrollDown()
+    {
+        if (_index == null || _index.sessions.Count == 0)
+            return;
+
+        scrollOffset = Mathf.Min(GetMaxScrollOffset(), scrollOffset + 1);
+        RenderList();
+        UpdateScrollButtons();
     }
 
     public void ResumeSelected()
@@ -162,8 +205,44 @@ public class SavedSessionsBrowser : MonoBehaviour
         SetText(headerText, $"Saved Sessions ({_index.sessions.Count})");
         SetText(helperText, BuildHelperText());
 
+        RenderVisibleItems();
+        RenderLegacyTextListIfNeeded();
+    }
+
+    private void RenderVisibleItems()
+    {
+        if (visibleItems == null || visibleItems.Length == 0)
+            return;
+
+        for (int i = 0; i < visibleItems.Length; i++)
+        {
+            var slot = visibleItems[i];
+            if (slot == null)
+                continue;
+
+            var sessionIndex = scrollOffset + i;
+            if (sessionIndex >= 0 && sessionIndex < _index.sessions.Count)
+            {
+                var summary = _index.sessions[sessionIndex];
+                slot.Bind(this, summary, sessionIndex, sessionIndex == selectedIndex);
+            }
+            else
+            {
+                slot.Clear();
+            }
+        }
+    }
+
+    private void RenderLegacyTextListIfNeeded()
+    {
         if (sessionsListText == null)
             return;
+
+        if (!showLegacyTextListWhenNoSlots || visibleItems == null || visibleItems.Length > 0)
+        {
+            sessionsListText.text = string.Empty;
+            return;
+        }
 
         var sb = new StringBuilder();
         for (int i = 0; i < _index.sessions.Count; i++)
@@ -175,12 +254,9 @@ public class SavedSessionsBrowser : MonoBehaviour
 
             sb.AppendLine($"{marker} {i + 1}. {label}");
             sb.AppendLine($"   {session.noteCount} notes · {FormatDate(session.updatedAtUtc)}");
-            if (!string.IsNullOrWhiteSpace(owner))
-                sb.AppendLine($"   {owner}");
-            if (!string.IsNullOrWhiteSpace(session.latestNotePreview))
-                sb.AppendLine($"   \"{session.latestNotePreview}\"");
-            if (i < _index.sessions.Count - 1)
-                sb.AppendLine();
+            if (!string.IsNullOrWhiteSpace(owner)) sb.AppendLine($"   {owner}");
+            if (!string.IsNullOrWhiteSpace(session.latestNotePreview)) sb.AppendLine($"   \"{session.latestNotePreview}\"");
+            if (i < _index.sessions.Count - 1) sb.AppendLine();
         }
 
         sessionsListText.text = sb.ToString().TrimEnd();
@@ -230,9 +306,12 @@ public class SavedSessionsBrowser : MonoBehaviour
         if (_index == null || _index.sessions.Count == 0)
             return "No saved sessions yet. Start a new one to begin.";
 
+        var top = Mathf.Min(scrollOffset + 1, _index.sessions.Count);
+        var bottom = Mathf.Min(scrollOffset + Mathf.Max(VisibleItemCount, 1), _index.sessions.Count);
+
         return _selectedSession == null
             ? "Choose a saved session to inspect it."
-            : $"Showing {selectedIndex + 1} of {_index.sessions.Count}. Use previous/next to browse, then resume when ready.";
+            : $"Showing {top}-{bottom} of {_index.sessions.Count}. Selected: {selectedIndex + 1}.";
     }
 
     private static string BuildOwnerLabel(string userName, string duckName)
@@ -270,6 +349,60 @@ public class SavedSessionsBrowser : MonoBehaviour
             if (note.siblingIndex >= 0 && note.siblingIndex < notesParent.childCount)
                 instance.transform.SetSiblingIndex(note.siblingIndex);
         }
+    }
+
+    private void EnsureSelectionVisible()
+    {
+        if (_index == null || _index.sessions.Count == 0)
+        {
+            scrollOffset = 0;
+            return;
+        }
+
+        var visibleCount = Mathf.Max(VisibleItemCount, 1);
+        if (selectedIndex < scrollOffset)
+            scrollOffset = selectedIndex;
+        else if (selectedIndex >= scrollOffset + visibleCount)
+            scrollOffset = selectedIndex - visibleCount + 1;
+
+        ClampScrollOffset();
+    }
+
+    private void ClampScrollOffset()
+    {
+        scrollOffset = Mathf.Clamp(scrollOffset, 0, GetMaxScrollOffset());
+    }
+
+    private int GetMaxScrollOffset()
+    {
+        if (_index == null || _index.sessions == null || _index.sessions.Count == 0)
+            return 0;
+
+        var visibleCount = Mathf.Max(VisibleItemCount, 1);
+        return Mathf.Max(0, _index.sessions.Count - visibleCount);
+    }
+
+    private void ClearVisibleItems()
+    {
+        if (visibleItems == null)
+            return;
+
+        foreach (var item in visibleItems)
+        {
+            if (item != null)
+                item.Clear();
+        }
+    }
+
+    private void UpdateScrollButtons()
+    {
+        var canScroll = _index != null && _index.sessions != null && _index.sessions.Count > Mathf.Max(VisibleItemCount, 1);
+
+        if (scrollUpButton != null)
+            scrollUpButton.interactable = canScroll && scrollOffset > 0;
+
+        if (scrollDownButton != null)
+            scrollDownButton.interactable = canScroll && scrollOffset < GetMaxScrollOffset();
     }
 
     private void ClearSpawnedNotes()
