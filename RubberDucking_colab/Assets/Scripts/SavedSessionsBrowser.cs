@@ -410,43 +410,41 @@ public class SavedSessionsBrowser : MonoBehaviour
         UpdateScrollButtons();
         CacheSlotBasePositions();
 
-        float direction = targetOffset > scrollOffset ? 1f : -1f;
-        float distance = rowSpacing * direction;
+        bool scrollingDown = targetOffset > scrollOffset;
         float duration = Mathf.Max(0.01f, scrollAnimationDuration);
         float elapsed = 0f;
+        float signedOffset = scrollingDown ? rowSpacing : -rowSpacing;
 
         while (elapsed < duration)
         {
             elapsed += Time.unscaledDeltaTime;
             float t = Mathf.Clamp01(elapsed / duration);
             float eased = Mathf.SmoothStep(0f, 1f, t);
-            ApplyAnimatedOffset(-distance * eased);
+            float animatedYOffset = -signedOffset * eased;
+
+            for (int i = 0; i < visibleItems.Length; i++)
+            {
+                var item = visibleItems[i];
+                if (item == null)
+                    continue;
+
+                var basePosition = i < _slotBasePositions.Length ? _slotBasePositions[i] : item.GetAnchoredPosition();
+                item.SetAnchoredPosition(basePosition + new Vector2(0f, animatedYOffset));
+            }
+
             yield return null;
         }
 
         scrollOffset = targetOffset;
+        RotateVisibleItems(scrollingDown);
+        CacheSlotBasePositions();
         ResetVisibleItemPositions();
+        RenderVisibleItems();
+        RenderLegacyTextListIfNeeded();
         LoadSelected();
-        RenderList();
         RenderSelection();
         _isAnimatingScroll = false;
         UpdateScrollButtons();
-    }
-
-    private void ApplyAnimatedOffset(float yOffset)
-    {
-        if (visibleItems == null || _slotBasePositions == null)
-            return;
-
-        for (int i = 0; i < visibleItems.Length; i++)
-        {
-            var item = visibleItems[i];
-            if (item == null)
-                continue;
-
-            var basePosition = i < _slotBasePositions.Length ? _slotBasePositions[i] : item.GetAnchoredPosition();
-            item.SetAnchoredPosition(basePosition + new Vector2(0f, yOffset));
-        }
     }
 
     private void CacheSlotBasePositions()
@@ -465,6 +463,27 @@ public class SavedSessionsBrowser : MonoBehaviour
             var item = visibleItems[i];
             if (item != null)
                 _slotBasePositions[i] = item.GetAnchoredPosition();
+        }
+    }
+
+    private void RotateVisibleItems(bool scrollingDown)
+    {
+        if (visibleItems == null || visibleItems.Length <= 1)
+            return;
+
+        if (scrollingDown)
+        {
+            var first = visibleItems[0];
+            for (int i = 0; i < visibleItems.Length - 1; i++)
+                visibleItems[i] = visibleItems[i + 1];
+            visibleItems[visibleItems.Length - 1] = first;
+        }
+        else
+        {
+            var last = visibleItems[visibleItems.Length - 1];
+            for (int i = visibleItems.Length - 1; i > 0; i--)
+                visibleItems[i] = visibleItems[i - 1];
+            visibleItems[0] = last;
         }
     }
 
