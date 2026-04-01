@@ -242,7 +242,8 @@ public class SavedSessionsBrowser : MonoBehaviour
         if (visibleItems == null || visibleItems.Length == 0)
             return;
 
-        CacheSlotBasePositions();
+        if (_slotBasePositions == null || _slotBasePositions.Length != visibleItems.Length)
+            CacheSlotBasePositions();
         ResetVisibleItemPositions();
 
         for (int i = 0; i < visibleItems.Length; i++)
@@ -437,7 +438,6 @@ public class SavedSessionsBrowser : MonoBehaviour
 
         scrollOffset = targetOffset;
         RotateVisibleItems(scrollingDown);
-        CacheSlotBasePositions();
         ResetVisibleItemPositions();
         RenderVisibleItems();
         RenderLegacyTextListIfNeeded();
