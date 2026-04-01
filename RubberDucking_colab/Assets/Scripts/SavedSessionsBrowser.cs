@@ -419,63 +419,34 @@ public class SavedSessionsBrowser : MonoBehaviour
             yield break;
         }
 
-        var startPositions = new Vector2[count];
-        var targetPositions = new Vector2[count];
-        var orderedItems = new SavedSessionListItemView[count];
-        Array.Copy(visibleItems, orderedItems, count);
-
-        Vector2 step = count > 1
-            ? (_slotBasePositions[1] - _slotBasePositions[0])
-            : new Vector2(0f, -Mathf.Abs(rowSpacing));
+        var animatedItems = new List<SavedSessionListItemView>();
+        var startPositions = new List<Vector2>();
+        var targetPositions = new List<Vector2>();
 
         if (scrollingDown)
         {
-            var recycled = orderedItems[0];
             for (int i = 1; i < count; i++)
             {
-                startPositions[i] = _slotBasePositions[i];
-                targetPositions[i] = _slotBasePositions[i - 1];
-            }
+                var item = visibleItems[i];
+                if (item == null)
+                    continue;
 
-            if (recycled != null)
-            {
-                int enteringIndex = targetOffset + count - 1;
-                if (enteringIndex < _index.sessions.Count)
-                {
-                    recycled.Bind(this, _index.sessions[enteringIndex], enteringIndex, enteringIndex == selectedIndex);
-                    startPositions[0] = _slotBasePositions[count - 1] + step;
-                    targetPositions[0] = _slotBasePositions[count - 1];
-                    recycled.SetAnchoredPosition(startPositions[0]);
-                }
-                else
-                {
-                    recycled.Clear();
-                }
+                animatedItems.Add(item);
+                startPositions.Add(_slotBasePositions[i]);
+                targetPositions.Add(_slotBasePositions[i - 1]);
             }
         }
         else
         {
-            var recycled = orderedItems[count - 1];
             for (int i = 0; i < count - 1; i++)
             {
-                startPositions[i] = _slotBasePositions[i];
-                targetPositions[i] = _slotBasePositions[i + 1];
-            }
+                var item = visibleItems[i];
+                if (item == null)
+                    continue;
 
-            if (recycled != null)
-            {
-                int enteringIndex = targetOffset;
-                if (enteringIndex >= 0)
-                {
-                    recycled.Bind(this, _index.sessions[enteringIndex], enteringIndex, enteringIndex == selectedIndex);
-                    startPositions[count - 1] = _slotBasePositions[0] - step;
-                    targetPositions[count - 1] = _slotBasePositions[0];
-                    recycled.SetAnchoredPosition(startPositions[count - 1]);
-                }
-                else
-                {
-                    recycled.Clear();
-                }
+                animatedItems.Add(item);
+                startPositions.Add(_slotBasePositions[i]);
+                targetPositions.Add(_slotBasePositions[i + 1]);
             }
         }
 
@@ -488,9 +459,9 @@ public class SavedSessionsBrowser : MonoBehaviour
             float t = Mathf.Clamp01(elapsed / duration);
             float eased = Mathf.SmoothStep(0f, 1f, t);
 
-            for (int i = 0; i < count; i++)
+            for (int i = 0; i < animatedItems.Count; i++)
             {
-                var item = orderedItems[i];
+                var item = animatedItems[i];
                 if (item == null || !item.gameObject.activeSelf)
                     continue;
 
