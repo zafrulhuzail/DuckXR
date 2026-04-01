@@ -352,7 +352,7 @@ public class SavedSessionsBrowser : MonoBehaviour
         var duck = string.IsNullOrWhiteSpace(duckName) ? null : duckName.Trim();
 
         if (!string.IsNullOrEmpty(user) && !string.IsNullOrEmpty(duck))
-            return $"{user} + {duck}";
+            return $"Owner: {user}, Duck Name: {duck}";
         return user ?? duck ?? string.Empty;
     }
 
@@ -419,6 +419,10 @@ public class SavedSessionsBrowser : MonoBehaviour
             yield break;
         }
 
+        SavedSessionListItemView outgoingItem = scrollingDown ? visibleItems[0] : visibleItems[count - 1];
+        if (outgoingItem != null)
+            outgoingItem.gameObject.SetActive(false);
+
         var animatedItems = new List<SavedSessionListItemView>();
         var startPositions = new List<Vector2>();
         var targetPositions = new List<Vector2>();
@@ -475,6 +479,11 @@ public class SavedSessionsBrowser : MonoBehaviour
         RotateVisibleItems(scrollingDown);
         ResetVisibleItemPositions();
         RefreshVisibleItemBindings();
+
+        SavedSessionListItemView enteringItem = scrollingDown ? visibleItems[count - 1] : visibleItems[0];
+        if (enteringItem != null)
+            enteringItem.gameObject.SetActive(true);
+
         RenderLegacyTextListIfNeeded();
         LoadSelected();
         RenderSelection();
