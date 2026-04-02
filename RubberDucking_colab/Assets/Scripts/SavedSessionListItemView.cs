@@ -119,7 +119,7 @@ public class SavedSessionListItemView : MonoBehaviour
         var duck = string.IsNullOrWhiteSpace(duckName) ? null : duckName.Trim();
 
         if (!string.IsNullOrEmpty(user) && !string.IsNullOrEmpty(duck))
-            return $"{user} + {duck}";
+            return $"Owner: {user}, Duck Name: {duck}";
 
         return user ?? duck ?? string.Empty;
     }
