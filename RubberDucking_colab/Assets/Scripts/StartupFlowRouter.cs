@@ -59,6 +59,8 @@ public class StartupFlowRouter : MonoBehaviour
 
     public void ResetProfile()
     {
+        SavedSessionService.ClearAllSavedSessions();
+
         PlayerPrefs.DeleteKey(HasCompletedOnboardingKey);
         PlayerPrefs.DeleteKey(LastUserNameKey);
         PlayerPrefs.DeleteKey(LastDuckNameKey);
@@ -66,6 +68,9 @@ public class StartupFlowRouter : MonoBehaviour
 
         if (profileLoader != null)
             profileLoader.ClearProfile();
+
+        if (savedSessionsListController != null)
+            savedSessionsListController.Refresh();
 
         Route();
     }
@@ -80,6 +85,8 @@ public class StartupFlowRouter : MonoBehaviour
         bool hasCompletedOnboarding = HasCompletedOnboarding();
         bool hasUserName = !string.IsNullOrWhiteSpace(PlayerPrefs.GetString(LastUserNameKey, string.Empty));
         bool hasDuckName = !string.IsNullOrWhiteSpace(PlayerPrefs.GetString(LastDuckNameKey, string.Empty));
+
+        Debug.Log($"Routing decision: HasCompletedOnboarding={hasCompletedOnboarding}, HasUserName={hasUserName}, HasDuckName={hasDuckName}");
 
         return hasCompletedOnboarding && hasUserName && hasDuckName;
     }

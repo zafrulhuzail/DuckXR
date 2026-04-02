@@ -232,6 +232,25 @@ public static class SavedSessionService
         }
     }
 
+    public static void ClearAllSavedSessions()
+    {
+        try
+        {
+            if (Directory.Exists(BaseFolder))
+                Directory.Delete(BaseFolder, true);
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"SavedSessionService: Failed to clear saved sessions: {e.Message}");
+        }
+
+        _currentSession = null;
+        _cachedIndex = null;
+
+        EnsureStorage();
+        Debug.Log("SavedSessionService: Cleared all saved sessions and rebuilt storage.");
+    }
+
     private static SavedSessionData CreateNewSession(string title = null)
     {
         var now = DateTime.UtcNow.ToString("o");
