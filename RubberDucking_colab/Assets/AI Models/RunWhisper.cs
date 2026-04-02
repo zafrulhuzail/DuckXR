@@ -485,6 +485,10 @@ public class RunWhisper : MonoBehaviour
 
                 noteInstance.noteId = savedNote.id;
             }
+            else if (savedNote == null)
+            {
+                Debug.Log("RunWhisper: No active session, transcription was not saved as a session note.");
+            }
 
             OnTranscriptionFinished?.Invoke(outputString);
         }

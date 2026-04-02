@@ -74,18 +74,11 @@ public static class SavedSessionService
     private static void InitializeOnLoad()
     {
         EnsureStorage();
-        EnsureCurrentSession();
+        _currentSession = null;
     }
 
     public static SavedSessionData EnsureCurrentSession()
     {
-        EnsureStorage();
-
-        if (_currentSession != null)
-            return _currentSession;
-
-        _currentSession = CreateNewSession();
-        SaveCurrentSession();
         return _currentSession;
     }
 
@@ -93,23 +86,32 @@ public static class SavedSessionService
     {
         EnsureStorage();
         _currentSession = CreateNewSession(title);
+        ApplyCurrentProfileToCurrentSession();
         SaveCurrentSession();
         return _currentSession;
     }
 
     public static void SetUserName(string userName)
     {
-        var session = EnsureCurrentSession();
-        session.userName = Sanitize(userName);
-        RefreshTitle(session);
+        userName = Sanitize(userName);
+
+        if (_currentSession == null)
+            return;
+
+        _currentSession.userName = userName;
+        RefreshTitle(_currentSession);
         SaveCurrentSession();
     }
 
     public static void SetDuckName(string duckName)
     {
-        var session = EnsureCurrentSession();
-        session.duckName = Sanitize(duckName);
-        RefreshTitle(session);
+        duckName = Sanitize(duckName);
+
+        if (_currentSession == null)
+            return;
+
+        _currentSession.duckName = duckName;
+        RefreshTitle(_currentSession);
         SaveCurrentSession();
     }
 
@@ -119,7 +121,13 @@ public static class SavedSessionService
         if (string.IsNullOrWhiteSpace(text))
             return null;
 
-        var session = EnsureCurrentSession();
+        if (_currentSession == null)
+        {
+            Debug.Log("SavedSessionService: No active session. Skipping transcript save.");
+            return null;
+        }
+
+        var session = _currentSession;
         var note = new SavedTranscriptNote
         {
             id = Guid.NewGuid().ToString("N"),
@@ -136,10 +144,10 @@ public static class SavedSessionService
 
     public static bool UpdateNoteTransform(string noteId, Transform noteTransform)
     {
-        if (string.IsNullOrWhiteSpace(noteId) || noteTransform == null)
+        if (string.IsNullOrWhiteSpace(noteId) || noteTransform == null || _currentSession == null)
             return false;
 
-        var session = EnsureCurrentSession();
+        var session = _currentSession;
         var note = session.notes.Find(n => n.id == noteId);
         if (note == null)
             return false;
@@ -316,6 +324,16 @@ public static class SavedSessionService
             session.title = user;
         else if (string.IsNullOrWhiteSpace(session.title))
             session.title = "Untitled session";
+    }
+
+    private static void ApplyCurrentProfileToCurrentSession()
+    {
+        if (_currentSession == null)
+            return;
+
+        _currentSession.userName = Sanitize(PlayerPrefs.GetString("LastUserName", string.Empty));
+        _currentSession.duckName = Sanitize(PlayerPrefs.GetString("LastDuckName", string.Empty));
+        RefreshTitle(_currentSession);
     }
 
     private static string BuildPreview(string text)
