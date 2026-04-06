@@ -11,6 +11,7 @@ public class SavedNoteAutosave : MonoBehaviour
     private Vector3 _lastRotation;
     private float _lastChangeTime;
     private bool _pendingSave;
+    private bool _autoSave = false;
 
     private void Awake()
     {

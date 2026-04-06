@@ -26,6 +26,10 @@ public class SavedSessionListItemView : MonoBehaviour
     [SerializeField] private Button button;
     [SerializeField] private UnityEvent onClicked;
 
+    [Header("Optional Panel Switching")]
+    [SerializeField] private GameObject browserPanelToHide;
+    [SerializeField] private GameObject sessionPanelToShow;
+
     private SavedSessionsBrowser _browser;
     private int _sessionIndex = -1;
 
@@ -42,18 +46,23 @@ public class SavedSessionListItemView : MonoBehaviour
 
     public void Bind(SavedSessionsBrowser browser, SavedSessionSummary summary, int sessionIndex, bool selected)
     {
+        var owner = BuildOwner(summary.userName, summary.duckName);
+        Bind(browser, summary.title, owner, summary.noteCount, summary.updatedAtUtc, summary.latestNotePreview, sessionIndex, selected);
+    }
+
+    public void Bind(SavedSessionsBrowser browser, string title, string owner, int noteCount, string updatedAtUtc, string latestNotePreview, int sessionIndex, bool selected)
+    {
         _browser = browser;
         _sessionIndex = sessionIndex;
 
         gameObject.SetActive(true);
 
-        var title = string.IsNullOrWhiteSpace(summary.title) ? "Untitled session" : summary.title;
-        var owner = BuildOwner(summary.userName, summary.duckName);
-        var meta = $"{summary.noteCount} notes · {FormatDate(summary.updatedAtUtc)}";
+        var safeTitle = string.IsNullOrWhiteSpace(title) ? "Untitled session" : title;
+        var meta = $"{noteCount} notes · {FormatDate(updatedAtUtc)}";
 
-        SetText(titleText, title);
+        SetText(titleText, safeTitle);
         SetText(metaText, string.IsNullOrWhiteSpace(owner) ? meta : owner + "\n" + meta);
-        SetText(previewText, string.IsNullOrWhiteSpace(summary.latestNotePreview) ? "No saved notes yet." : summary.latestNotePreview);
+        SetText(previewText, string.IsNullOrWhiteSpace(latestNotePreview) ? "No saved notes yet." : latestNotePreview);
 
         SetSelected(selected);
     }
@@ -102,6 +111,27 @@ public class SavedSessionListItemView : MonoBehaviour
 
     public void TriggerSelect()
     {
+        HandleClick();
+    }
+
+    public async void TriggerSelectAndOpen()
+    {
+        if (_browser != null && _sessionIndex >= 0)
+        {
+            bool opened = await _browser.SelectAndResumeByIndexAsync(_sessionIndex);
+            if (opened)
+            {
+                if (browserPanelToHide != null)
+                    browserPanelToHide.SetActive(false);
+
+                if (sessionPanelToShow != null)
+                    sessionPanelToShow.SetActive(true);
+            }
+
+            onClicked?.Invoke();
+            return;
+        }
+
         HandleClick();
     }
 

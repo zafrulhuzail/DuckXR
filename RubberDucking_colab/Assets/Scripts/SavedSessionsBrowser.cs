@@ -9,6 +9,32 @@ using System.Collections;
 
 public class SavedSessionsBrowser : MonoBehaviour
 {
+    private enum BrowserDataMode
+    {
+        LocalSavedSessions = 0,
+        SharedWithMe = 1,
+        SharedOwnedByMe = 2
+    }
+
+    private sealed class BrowserSessionItem
+    {
+        public string id;
+        public string title;
+        public string userName;
+        public string duckName;
+        public string ownerDisplayName;
+        public string ownerEmail;
+        public string createdAtUtc;
+        public string updatedAtUtc;
+        public int noteCount;
+        public string latestNotePreview;
+        public bool isShared;
+    }
+
+    [Header("Data Source")]
+    [SerializeField] private BrowserDataMode dataMode = BrowserDataMode.LocalSavedSessions;
+    [SerializeField] private CloudSharingFacade cloudSharingFacade;
+
     [Header("List UI")]
     [SerializeField] private TMP_Text sessionsListText;
     [SerializeField] private TMP_Text selectedSessionText;
@@ -49,10 +75,12 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     private SavedSessionIndex _index;
     private SavedSessionData _selectedSession;
+    private SharedSessionRecord _selectedSharedSession;
+    private List<BrowserSessionItem> _browserItems = new List<BrowserSessionItem>();
     private Vector2[] _slotBasePositions;
     private bool _isAnimatingScroll;
 
-    public int SessionCount => _index?.sessions?.Count ?? 0;
+    public int SessionCount => _browserItems?.Count ?? 0;
     public SavedSessionData SelectedSession => _selectedSession;
     public int VisibleItemCount => visibleItems == null ? 0 : visibleItems.Length;
 
@@ -64,17 +92,41 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     public void Refresh()
     {
-        _index = SavedSessionService.LoadIndex();
-        var hasSessions = _index != null && _index.sessions.Count > 0;
+        _ = RefreshAsync();
+    }
+
+    public async void RefreshSharedWithMe()
+    {
+        dataMode = BrowserDataMode.SharedWithMe;
+        await RefreshAsync();
+    }
+
+    public async void RefreshSharedOwnedByMe()
+    {
+        dataMode = BrowserDataMode.SharedOwnedByMe;
+        await RefreshAsync();
+    }
+
+    public async void RefreshLocalSessions()
+    {
+        dataMode = BrowserDataMode.LocalSavedSessions;
+        await RefreshAsync();
+    }
+
+    private async System.Threading.Tasks.Task RefreshAsync()
+    {
+        await LoadBrowserItemsAsync();
+        var hasSessions = _browserItems != null && _browserItems.Count > 0;
 
         if (!hasSessions)
         {
             selectedIndex = 0;
             scrollOffset = 0;
             _selectedSession = null;
-            SetText(headerText, "Saved Sessions");
-            SetText(helperText, "No saved sessions yet. Start a new one to begin.");
-            SetText(sessionsListText, showLegacyTextListWhenNoSlots ? "No saved sessions yet." : string.Empty);
+            _selectedSharedSession = null;
+            SetText(headerText, BuildHeaderTitle(0));
+            SetText(helperText, BuildEmptyHelperText());
+            SetText(sessionsListText, showLegacyTextListWhenNoSlots ? "No sessions yet." : string.Empty);
             SetText(selectedSessionText, "No session selected.");
             SetText(selectedNotesText, string.Empty);
             ClearVisibleItems();
@@ -83,10 +135,10 @@ public class SavedSessionsBrowser : MonoBehaviour
             return;
         }
 
-        selectedIndex = Mathf.Clamp(selectedIndex, 0, _index.sessions.Count - 1);
+        selectedIndex = Mathf.Clamp(selectedIndex, 0, _browserItems.Count - 1);
         ClampScrollOffset();
         EnsureSelectionVisible();
-        LoadSelected();
+        await LoadSelectedAsync();
         RenderList();
         RenderSelection();
         UpdateScrollButtons();
@@ -95,14 +147,17 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     public void StartNewSession()
     {
+        if (dataMode != BrowserDataMode.LocalSavedSessions)
+        {
+            Debug.LogWarning("SavedSessionsBrowser: StartNewSession is only supported in local mode.");
+            return;
+        }
+
         SavedSessionService.StartNewSession(newSessionTitle);
         _index = SavedSessionService.LoadIndex();
         selectedIndex = 0;
         scrollOffset = 0;
-        LoadSelected();
-        RenderList();
-        RenderSelection();
-        UpdateScrollButtons();
+        Refresh();
 
         if (clearPreviewWhenStartingNewSession)
             ClearSpawnedNotes();
@@ -114,57 +169,62 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     public void SelectNext()
     {
-        if (_index == null || _index.sessions.Count == 0)
+        if (_browserItems == null || _browserItems.Count == 0)
             return;
 
         if (wrapSelection)
-            selectedIndex = (selectedIndex + 1) % _index.sessions.Count;
+            selectedIndex = (selectedIndex + 1) % _browserItems.Count;
         else
-            selectedIndex = Mathf.Min(selectedIndex + 1, _index.sessions.Count - 1);
+            selectedIndex = Mathf.Min(selectedIndex + 1, _browserItems.Count - 1);
 
         EnsureSelectionVisible();
-        LoadSelected();
-        RenderList();
-        RenderSelection();
-        UpdateScrollButtons();
-        onSelectionChanged?.Invoke();
+        _ = ReloadSelectionAndRenderAsync();
     }
 
     public void SelectPrevious()
     {
-        if (_index == null || _index.sessions.Count == 0)
+        if (_browserItems == null || _browserItems.Count == 0)
             return;
 
         if (wrapSelection)
-            selectedIndex = (selectedIndex - 1 + _index.sessions.Count) % _index.sessions.Count;
+            selectedIndex = (selectedIndex - 1 + _browserItems.Count) % _browserItems.Count;
         else
             selectedIndex = Mathf.Max(selectedIndex - 1, 0);
 
         EnsureSelectionVisible();
-        LoadSelected();
-        RenderList();
-        RenderSelection();
-        UpdateScrollButtons();
-        onSelectionChanged?.Invoke();
+        _ = ReloadSelectionAndRenderAsync();
     }
 
     public void SelectByIndex(int index)
     {
-        if (_index == null || _index.sessions.Count == 0)
+        if (_browserItems == null || _browserItems.Count == 0)
             return;
 
-        selectedIndex = Mathf.Clamp(index, 0, _index.sessions.Count - 1);
+        selectedIndex = Mathf.Clamp(index, 0, _browserItems.Count - 1);
         EnsureSelectionVisible();
-        LoadSelected();
-        RenderList();
-        RenderSelection();
-        UpdateScrollButtons();
-        onSelectionChanged?.Invoke();
+        _ = ReloadSelectionAndRenderAsync();
+    }
+
+    public async System.Threading.Tasks.Task<bool> SelectAndResumeByIndexAsync(int index)
+    {
+        if (_browserItems == null || _browserItems.Count == 0)
+            return false;
+
+        selectedIndex = Mathf.Clamp(index, 0, _browserItems.Count - 1);
+        EnsureSelectionVisible();
+        await ReloadSelectionAndRenderAsync();
+        ResumeSelected();
+        return _selectedSession != null || _selectedSharedSession != null;
+    }
+
+    public async void SelectAndResumeByIndex(int index)
+    {
+        await SelectAndResumeByIndexAsync(index);
     }
 
     public void ScrollUp()
     {
-        if (_index == null || _index.sessions.Count == 0 || _isAnimatingScroll)
+        if (_browserItems == null || _browserItems.Count == 0 || _isAnimatingScroll)
             return;
 
         var targetOffset = Mathf.Max(0, scrollOffset - 1);
@@ -183,7 +243,7 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     public void ScrollDown()
     {
-        if (_index == null || _index.sessions.Count == 0 || _isAnimatingScroll)
+        if (_browserItems == null || _browserItems.Count == 0 || _isAnimatingScroll)
             return;
 
         var targetOffset = Mathf.Min(GetMaxScrollOffset(), scrollOffset + 1);
@@ -202,35 +262,116 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     public void ResumeSelected()
     {
-        if (_selectedSession == null)
-            return;
-
-        if (SavedSessionService.ResumeSession(_selectedSession.id))
+        if (_selectedSession != null)
         {
-            RestoreNotes(_selectedSession);
-            Debug.Log($"SavedSessionsBrowser: Resumed {_selectedSession.title}");
+            if (SavedSessionService.ResumeSession(_selectedSession.id))
+            {
+                RestoreNotes(_selectedSession);
+                Debug.Log($"SavedSessionsBrowser: Resumed {_selectedSession.title}");
+                onSessionResumed?.Invoke();
+            }
+            return;
+        }
+
+        if (_selectedSharedSession != null)
+        {
+            var local = SharedSessionMapper.ToLocalSession(_selectedSharedSession);
+            RestoreNotes(local);
+            Debug.Log($"SavedSessionsBrowser: Restored shared session {_selectedSharedSession.title}");
             onSessionResumed?.Invoke();
         }
     }
 
-    private void LoadSelected()
+    private async System.Threading.Tasks.Task ReloadSelectionAndRenderAsync()
     {
-        if (_index == null || _index.sessions.Count == 0)
+        await LoadSelectedAsync();
+        RenderList();
+        RenderSelection();
+        UpdateScrollButtons();
+        onSelectionChanged?.Invoke();
+    }
+
+    private async System.Threading.Tasks.Task LoadBrowserItemsAsync()
+    {
+        _selectedSession = null;
+        _selectedSharedSession = null;
+        _browserItems = new List<BrowserSessionItem>();
+
+        if (dataMode == BrowserDataMode.LocalSavedSessions)
         {
-            _selectedSession = null;
+            _index = SavedSessionService.LoadIndex();
+            if (_index?.sessions == null)
+                return;
+
+            foreach (var session in _index.sessions)
+            {
+                _browserItems.Add(new BrowserSessionItem
+                {
+                    id = session.id,
+                    title = session.title,
+                    userName = session.userName,
+                    duckName = session.duckName,
+                    createdAtUtc = session.createdAtUtc,
+                    updatedAtUtc = session.updatedAtUtc,
+                    noteCount = session.noteCount,
+                    latestNotePreview = session.latestNotePreview,
+                    isShared = false
+                });
+            }
+
             return;
         }
 
-        var summary = _index.sessions[selectedIndex];
-        _selectedSession = SavedSessionService.LoadSession(summary.id);
+        if (cloudSharingFacade == null)
+        {
+            Debug.LogWarning("SavedSessionsBrowser: CloudSharingFacade is required for shared session modes.");
+            return;
+        }
+
+        IReadOnlyList<SharedSessionSummaryRecord> summaries = dataMode == BrowserDataMode.SharedOwnedByMe
+            ? await cloudSharingFacade.LoadOwnedByMeAsync()
+            : await cloudSharingFacade.LoadSharedWithMeAsync();
+
+        foreach (var session in summaries)
+        {
+            _browserItems.Add(new BrowserSessionItem
+            {
+                id = session.id,
+                title = session.title,
+                ownerDisplayName = session.ownerDisplayName,
+                ownerEmail = session.ownerEmail,
+                updatedAtUtc = session.updatedAtUtc,
+                noteCount = session.noteCount,
+                latestNotePreview = session.latestNotePreview,
+                isShared = true
+            });
+        }
+    }
+
+    private async System.Threading.Tasks.Task LoadSelectedAsync()
+    {
+        _selectedSession = null;
+        _selectedSharedSession = null;
+
+        if (_browserItems == null || _browserItems.Count == 0)
+            return;
+
+        var summary = _browserItems[selectedIndex];
+        if (!summary.isShared)
+        {
+            _selectedSession = SavedSessionService.LoadSession(summary.id);
+            return;
+        }
+
+        if (cloudSharingFacade == null)
+            return;
+
+        _selectedSharedSession = await cloudSharingFacade.LoadSharedSessionAsync(summary.id);
     }
 
     private void RenderList()
     {
-        if (_index == null)
-            return;
-
-        SetText(headerText, $"Saved Sessions ({_index.sessions.Count})");
+        SetText(headerText, BuildHeaderTitle(_browserItems.Count));
         SetText(helperText, BuildHelperText());
 
         RenderVisibleItems();
@@ -253,10 +394,10 @@ public class SavedSessionsBrowser : MonoBehaviour
                 continue;
 
             var sessionIndex = scrollOffset + i;
-            if (sessionIndex >= 0 && sessionIndex < _index.sessions.Count)
+            if (sessionIndex >= 0 && sessionIndex < _browserItems.Count)
             {
-                var summary = _index.sessions[sessionIndex];
-                slot.Bind(this, summary, sessionIndex, sessionIndex == selectedIndex);
+                var summary = _browserItems[sessionIndex];
+                slot.Bind(this, summary.title, BuildOwnerLabel(summary), summary.noteCount, summary.updatedAtUtc, summary.latestNotePreview, sessionIndex, sessionIndex == selectedIndex);
             }
             else
             {
@@ -277,18 +418,18 @@ public class SavedSessionsBrowser : MonoBehaviour
         }
 
         var sb = new StringBuilder();
-        for (int i = 0; i < _index.sessions.Count; i++)
+        for (int i = 0; i < _browserItems.Count; i++)
         {
-            var session = _index.sessions[i];
+            var session = _browserItems[i];
             var marker = i == selectedIndex ? ">" : "-";
             var label = string.IsNullOrWhiteSpace(session.title) ? "Untitled session" : session.title;
-            var owner = BuildOwnerLabel(session.userName, session.duckName);
+            var owner = BuildOwnerLabel(session);
 
             sb.AppendLine($"{marker} {i + 1}. {label}");
             sb.AppendLine($"   {session.noteCount} notes · {FormatDate(session.updatedAtUtc)}");
             if (!string.IsNullOrWhiteSpace(owner)) sb.AppendLine($"   {owner}");
             if (!string.IsNullOrWhiteSpace(session.latestNotePreview)) sb.AppendLine($"   \"{session.latestNotePreview}\"");
-            if (i < _index.sessions.Count - 1) sb.AppendLine();
+            if (i < _browserItems.Count - 1) sb.AppendLine();
         }
 
         sessionsListText.text = sb.ToString().TrimEnd();
@@ -296,60 +437,145 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     private void RenderSelection()
     {
-        if (_selectedSession == null)
+        if (_selectedSession == null && _selectedSharedSession == null)
         {
             SetText(selectedSessionText, "No session selected.");
             SetText(selectedNotesText, string.Empty);
             return;
         }
 
-        var title = string.IsNullOrWhiteSpace(_selectedSession.title) ? "Untitled session" : _selectedSession.title;
+        if (_selectedSession != null)
+        {
+            RenderSavedSessionSelection(_selectedSession);
+            return;
+        }
+
+        RenderSharedSessionSelection(_selectedSharedSession);
+    }
+
+    private void RenderSavedSessionSelection(SavedSessionData session)
+    {
+        var title = string.IsNullOrWhiteSpace(session.title) ? "Untitled session" : session.title;
         var summary = new StringBuilder();
         summary.AppendLine(title);
-        summary.AppendLine($"User: {Fallback(_selectedSession.userName)}");
-        summary.AppendLine($"Duck: {Fallback(_selectedSession.duckName)}");
-        summary.AppendLine($"Created: {FormatDate(_selectedSession.createdAtUtc)}");
-        summary.AppendLine($"Updated: {FormatDate(_selectedSession.updatedAtUtc)}");
-        summary.AppendLine($"Notes: {_selectedSession.notes.Count}");
+        summary.AppendLine($"User: {Fallback(session.userName)}");
+        summary.AppendLine($"Duck: {Fallback(session.duckName)}");
+        summary.AppendLine($"Created: {FormatDate(session.createdAtUtc)}");
+        summary.AppendLine($"Updated: {FormatDate(session.updatedAtUtc)}");
+        summary.AppendLine($"Notes: {session.notes.Count}");
         SetText(selectedSessionText, summary.ToString().TrimEnd());
+        SetText(selectedNotesText, BuildNotesText(session.notes));
+    }
 
+    private void RenderSharedSessionSelection(SharedSessionRecord session)
+    {
+        var title = string.IsNullOrWhiteSpace(session.title) ? "Untitled session" : session.title;
+        var summary = new StringBuilder();
+        summary.AppendLine(title);
+        summary.AppendLine($"Owner: {Fallback(session.ownerDisplayName)}");
+        summary.AppendLine($"Owner Email: {Fallback(session.ownerEmail)}");
+        summary.AppendLine($"User: {Fallback(session.userName)}");
+        summary.AppendLine($"Duck: {Fallback(session.duckName)}");
+        summary.AppendLine($"Created: {FormatDate(session.createdAtUtc)}");
+        summary.AppendLine($"Updated: {FormatDate(session.updatedAtUtc)}");
+        summary.AppendLine($"Notes: {session.notes.Count}");
+        SetText(selectedSessionText, summary.ToString().TrimEnd());
+        SetText(selectedNotesText, BuildSharedNotesText(session.notes));
+    }
+
+    private static string BuildNotesText(List<SavedTranscriptNote> notesData)
+    {
         var notes = new StringBuilder();
-        if (_selectedSession.notes.Count == 0)
+        if (notesData == null || notesData.Count == 0)
         {
             notes.Append("No notes saved in this session yet.");
         }
         else
         {
-            for (int i = 0; i < _selectedSession.notes.Count; i++)
+            for (int i = 0; i < notesData.Count; i++)
             {
-                var note = _selectedSession.notes[i];
+                var note = notesData[i];
                 notes.AppendLine($"[{i + 1}] {FormatDate(note.createdAtUtc)}");
                 notes.AppendLine(note.text);
-                if (i < _selectedSession.notes.Count - 1)
+                if (i < notesData.Count - 1)
                     notes.AppendLine().AppendLine();
             }
         }
+        return notes.ToString().TrimEnd();
+    }
 
-        SetText(selectedNotesText, notes.ToString().TrimEnd());
+    private static string BuildSharedNotesText(List<SharedTranscriptNoteData> notesData)
+    {
+        var notes = new StringBuilder();
+        if (notesData == null || notesData.Count == 0)
+        {
+            notes.Append("No notes saved in this session yet.");
+        }
+        else
+        {
+            for (int i = 0; i < notesData.Count; i++)
+            {
+                var note = notesData[i];
+                notes.AppendLine($"[{i + 1}] {FormatDate(note.createdAtUtc)}");
+                notes.AppendLine(note.text);
+                if (i < notesData.Count - 1)
+                    notes.AppendLine().AppendLine();
+            }
+        }
+        return notes.ToString().TrimEnd();
     }
 
     private string BuildHelperText()
     {
-        if (_index == null || _index.sessions.Count == 0)
-            return "No saved sessions yet. Start a new one to begin.";
+        if (_browserItems == null || _browserItems.Count == 0)
+            return BuildEmptyHelperText();
 
-        var top = Mathf.Min(scrollOffset + 1, _index.sessions.Count);
-        var bottom = Mathf.Min(scrollOffset + Mathf.Max(VisibleItemCount, 1), _index.sessions.Count);
+        var top = Mathf.Min(scrollOffset + 1, _browserItems.Count);
+        var bottom = Mathf.Min(scrollOffset + Mathf.Max(VisibleItemCount, 1), _browserItems.Count);
 
-        return _selectedSession == null
-            ? "Choose a saved session to inspect it."
-            : $"Showing {top}-{bottom} of {_index.sessions.Count}. Selected: {selectedIndex + 1}.";
+        return (_selectedSession == null && _selectedSharedSession == null)
+            ? "Choose a session to inspect it."
+            : $"Showing {top}-{bottom} of {_browserItems.Count}. Selected: {selectedIndex + 1}.";
     }
 
-    private static string BuildOwnerLabel(string userName, string duckName)
+    private string BuildEmptyHelperText()
     {
-        var user = string.IsNullOrWhiteSpace(userName) ? null : userName.Trim();
-        var duck = string.IsNullOrWhiteSpace(duckName) ? null : duckName.Trim();
+        return dataMode switch
+        {
+            BrowserDataMode.SharedWithMe => "No shared sessions yet.",
+            BrowserDataMode.SharedOwnedByMe => "No cloud sessions uploaded yet.",
+            _ => "No saved sessions yet. Start a new one to begin."
+        };
+    }
+
+    private string BuildHeaderTitle(int count)
+    {
+        return dataMode switch
+        {
+            BrowserDataMode.SharedWithMe => $"Shared With Me ({count})",
+            BrowserDataMode.SharedOwnedByMe => $"My Shared Sessions ({count})",
+            _ => $"Saved Sessions ({count})"
+        };
+    }
+
+    private static string BuildOwnerLabel(BrowserSessionItem item)
+    {
+        if (item == null)
+            return string.Empty;
+
+        if (item.isShared)
+        {
+            if (!string.IsNullOrWhiteSpace(item.ownerDisplayName) && !string.IsNullOrWhiteSpace(item.ownerEmail))
+                return $"Owner: {item.ownerDisplayName} ({item.ownerEmail})";
+            if (!string.IsNullOrWhiteSpace(item.ownerDisplayName))
+                return $"Owner: {item.ownerDisplayName}";
+            if (!string.IsNullOrWhiteSpace(item.ownerEmail))
+                return $"Owner: {item.ownerEmail}";
+            return string.Empty;
+        }
+
+        var user = string.IsNullOrWhiteSpace(item.userName) ? null : item.userName.Trim();
+        var duck = string.IsNullOrWhiteSpace(item.duckName) ? null : item.duckName.Trim();
 
         if (!string.IsNullOrEmpty(user) && !string.IsNullOrEmpty(duck))
             return $"Owner: {user}, Duck Name: {duck}";
@@ -385,7 +611,7 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     private void EnsureSelectionVisible()
     {
-        if (_index == null || _index.sessions.Count == 0)
+        if (_browserItems == null || _browserItems.Count == 0)
         {
             scrollOffset = 0;
             return;
@@ -485,7 +711,7 @@ public class SavedSessionsBrowser : MonoBehaviour
             enteringItem.gameObject.SetActive(true);
 
         RenderLegacyTextListIfNeeded();
-        LoadSelected();
+        _ = LoadSelectedAsync();
         RenderSelection();
         _isAnimatingScroll = false;
         UpdateScrollButtons();
@@ -533,7 +759,7 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     private void RefreshVisibleItemBindings()
     {
-        if (visibleItems == null || _index == null)
+        if (visibleItems == null || _browserItems == null)
             return;
 
         for (int i = 0; i < visibleItems.Length; i++)
@@ -543,10 +769,15 @@ public class SavedSessionsBrowser : MonoBehaviour
                 continue;
 
             int sessionIndex = scrollOffset + i;
-            if (sessionIndex >= 0 && sessionIndex < _index.sessions.Count)
-                item.Bind(this, _index.sessions[sessionIndex], sessionIndex, sessionIndex == selectedIndex);
+            if (sessionIndex >= 0 && sessionIndex < _browserItems.Count)
+            {
+                var summary = _browserItems[sessionIndex];
+                item.Bind(this, summary.title, BuildOwnerLabel(summary), summary.noteCount, summary.updatedAtUtc, summary.latestNotePreview, sessionIndex, sessionIndex == selectedIndex);
+            }
             else
+            {
                 item.Clear();
+            }
         }
     }
 
@@ -570,11 +801,11 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     private int GetMaxScrollOffset()
     {
-        if (_index == null || _index.sessions == null || _index.sessions.Count == 0)
+        if (_browserItems == null || _browserItems.Count == 0)
             return 0;
 
         var visibleCount = Mathf.Max(VisibleItemCount, 1);
-        return Mathf.Max(0, _index.sessions.Count - visibleCount);
+        return Mathf.Max(0, _browserItems.Count - visibleCount);
     }
 
     private void ClearVisibleItems()
@@ -591,7 +822,7 @@ public class SavedSessionsBrowser : MonoBehaviour
 
     private void UpdateScrollButtons()
     {
-        var canScroll = _index != null && _index.sessions != null && _index.sessions.Count > Mathf.Max(VisibleItemCount, 1);
+        var canScroll = _browserItems != null && _browserItems.Count > Mathf.Max(VisibleItemCount, 1);
 
         if (scrollUpButton != null)
             scrollUpButton.interactable = canScroll && scrollOffset > 0;
