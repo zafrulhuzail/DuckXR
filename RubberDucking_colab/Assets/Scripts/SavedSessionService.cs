@@ -279,7 +279,8 @@ public static class SavedSessionService
 
         note.localPosition = SavedVector3Data.FromVector3(noteTransform.localPosition);
         note.localRotationEuler = SavedVector3Data.FromVector3(noteTransform.localEulerAngles);
-        note.localScale = SavedVector3Data.FromVector3(noteTransform.localScale);
+        // note.localScale = SavedVector3Data.FromVector3(noteTransform.localScale);
+        note.localScale = null;
         note.siblingIndex = noteTransform.GetSiblingIndex();
     }
 

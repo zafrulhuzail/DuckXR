@@ -36,5 +36,6 @@ public class SavedNoteInstance : MonoBehaviour
 
         // Keep the prefab's authored scale so restored notes stay readable.
         // We intentionally do not overwrite localScale from saved data here.
+        transform.localScale = Vector3.one;
     }
 }
