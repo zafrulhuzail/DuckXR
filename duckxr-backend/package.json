@@ -1,0 +1,10 @@
+{
+  "name": "duckxr-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal local backend for DuckXR MVP",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
