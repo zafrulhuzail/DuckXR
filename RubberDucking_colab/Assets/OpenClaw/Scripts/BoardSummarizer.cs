@@ -18,7 +18,7 @@ public class BoardSummarizer : MonoBehaviour
 
     [Header("OpenClaw")]
     [SerializeField] private OpenClawRelayConnect relay;
-    [SerializeField] private string summaryInstruction = "Summarize these board notes. Return: 1) key themes, 2) action items, 3) blockers or risks, and 4) a one-sentence takeaway. Keep it concise and easy to scan.";
+    [SerializeField] private string summaryInstruction = "Summarize these board notes. Return plain text only. Do not use markdown, bold, asterisks, headers, or code formatting. Use simple readable lines. Include: 1) key themes, 2) action items, 3) blockers or risks, and 4) a one-sentence takeaway. Keep it concise and easy to scan.";
 
     [Header("Output")]
     [SerializeField] private TMP_Text outputText;
@@ -113,12 +113,35 @@ public class BoardSummarizer : MonoBehaviour
 
     private void HandleRelayTextReceived(string text)
     {
-        SetOutput(string.IsNullOrWhiteSpace(text) ? "No summary returned." : text);
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            SetOutput("No summary returned.");
+            return;
+        }
+
+        SetOutput(SanitizeMarkdown(text));
     }
 
     private void HandleRelayRequestFailed(string error)
     {
         SetOutput("Summary failed: " + error);
+    }
+
+    private string SanitizeMarkdown(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = text;
+        cleaned = cleaned.Replace("**", string.Empty);
+        cleaned = cleaned.Replace("__", string.Empty);
+        cleaned = cleaned.Replace("```", string.Empty);
+        cleaned = cleaned.Replace("`", string.Empty);
+        cleaned = cleaned.Replace("#", string.Empty);
+
+        return cleaned.Trim();
     }
 
     private void SetOutput(string text)
