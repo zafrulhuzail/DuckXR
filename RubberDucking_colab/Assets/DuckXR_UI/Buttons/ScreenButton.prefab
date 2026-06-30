@@ -381,7 +381,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   blockId: 5838e892-31a4-4f65-a415-dc108aefa14c
-  instanceId: 8bad6dec-faae-43eb-8d1e-54407b2cf62b
+  instanceId: f8376ddd-b49d-4307-abfd-41f922adcc72
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: c88fc9f2-e9d1-41ea-b937-cdaf92a806d0
@@ -603,7 +603,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 0, y: 0}
+  m_AnchoredPosition: {x: -1.68, y: -2.65}
   m_SizeDelta: {x: 8.5, y: 5}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!23 &7432991697106701069

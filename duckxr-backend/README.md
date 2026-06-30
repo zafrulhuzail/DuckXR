@@ -1,45 +1,46 @@
-# DuckXR Backend (Local MVP)
+# OpenClaw Quest Relay
 
-Tiny local backend for testing DuckXR -> backend -> reply.
+Small Express relay so your Quest or Unity app does **not** need to store the real OpenClaw gateway token.
 
-## Start
+## Endpoints
 
-```powershell
-cd C:\Users\Zafrul Huzail\.openclaw\workspace\DuckXR\duckxr-backend
-node server.js
+- `GET /health`
+- `POST /quest/ask`
+
+## Request body
+
+```json
+{
+  "input": "Tell me a short robot joke.",
+  "user": "meta-quest-test"
+}
 ```
 
-Or:
+## Response shape
 
-```powershell
-npm start
+```json
+{
+  "ok": true,
+  "text": "...assistant reply...",
+  "raw": { "...": "full upstream response" }
+}
 ```
 
-Server URL:
+## Setup
 
-- Editor testing: `http://localhost:8080/duck/chat`
-- Health check: `http://localhost:8080/health`
+1. Copy `.env.example` to `.env`
+2. Set `OPENCLAW_TOKEN`
+3. Run:
+   - `npm install`
+   - `npm start`
 
-## Unity setup
+## Default local config
 
-In `DuckAIClient` set:
+- Relay: `http://localhost:3001/quest/ask`
+- OpenClaw upstream: `http://127.0.0.1:18789/v1/responses`
 
-- `backendUrl = http://localhost:8080/duck/chat`
+## Why this is safer
 
-If testing from Quest on the same Wi-Fi, use your PC LAN IP instead:
-
-- `http://YOUR_PC_IP:8080/duck/chat`
-
-Example:
-
-- `http://192.168.1.23:8080/duck/chat`
-
-## Current behavior
-
-This is a mock backend.
-It does **not** call OpenClaw yet.
-It just returns a structured JSON response so you can validate the end-to-end flow.
-
-## Next step
-
-Once Unity can talk to this backend reliably, replace the mock `buildReply()` logic in `server.js` with real OpenClaw forwarding.
+- token stays on the PC/server
+- Quest only talks to the relay
+- easier to add auth, rate limits, logging, or request validation later

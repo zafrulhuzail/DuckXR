@@ -68,11 +68,11 @@ public class FirebaseEmailPasswordAuthTester : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogWarning($"FirebaseEmailPasswordAuthTester: Sign-in failed. {ex.Message}");
+            LogFirebaseException("FirebaseEmailPasswordAuthTester: Sign-in failed", ex);
 
             if (!createUserIfMissing)
             {
-                Debug.LogError($"FirebaseEmailPasswordAuthTester: Email/password sign-in failed. {ex}");
+                Debug.LogError("FirebaseEmailPasswordAuthTester: Email/password sign-in failed and createUserIfMissing is disabled.");
                 return;
             }
 
@@ -86,7 +86,7 @@ public class FirebaseEmailPasswordAuthTester : MonoBehaviour
             }
             catch (Exception createEx)
             {
-                Debug.LogError($"FirebaseEmailPasswordAuthTester: User creation failed. {createEx}");
+                LogFirebaseException("FirebaseEmailPasswordAuthTester: User creation failed", createEx);
             }
         }
     }
@@ -110,7 +110,7 @@ public class FirebaseEmailPasswordAuthTester : MonoBehaviour
         }
         catch (Exception ex)
         {
-            Debug.LogError($"FirebaseEmailPasswordAuthTester: User creation failed. {ex}");
+            LogFirebaseException("FirebaseEmailPasswordAuthTester: User creation failed", ex);
         }
     }
 
@@ -254,5 +254,18 @@ public class FirebaseEmailPasswordAuthTester : MonoBehaviour
     private static void LogSignedInUser(string prefix, FirebaseUser user)
     {
         Debug.Log($"{prefix}. UID={user.UserId}, Email={user.Email}, DisplayName={user.DisplayName}, Anonymous={user.IsAnonymous}");
+    }
+
+    private static void LogFirebaseException(string prefix, Exception ex)
+    {
+        string inner = ex.InnerException != null ? ex.InnerException.Message : "(none)";
+        string details = $"{prefix}. Type={ex.GetType().FullName}, Message={ex.Message}, Inner={inner}\nStack:\n{ex}";
+
+        if (ex is FirebaseException firebaseEx)
+        {
+            details += $"\nFirebase ErrorCode={(int)firebaseEx.ErrorCode} ({firebaseEx.ErrorCode})";
+        }
+
+        Debug.LogError(details);
     }
 }
