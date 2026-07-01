@@ -8499,9 +8499,9 @@ RectTransform:
   - {fileID: 695032077}
   m_Father: {fileID: 1550285343}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 60.5, y: -12}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 121, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &118092351
@@ -33577,7 +33577,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &380584328
 RectTransform:
   m_ObjectHideFlags: 0
@@ -40345,8 +40345,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _ovrCameraRig: {fileID: 1877649949}
-  _leftHand: {fileID: 0}
-  _rightHand: {fileID: 0}
+  _leftHand: {fileID: 185986767}
+  _rightHand: {fileID: 558432444}
   _requireOvrHands: 1
 --- !u!114 &446716645
 MonoBehaviour:
@@ -74367,7 +74367,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &859028441
 Transform:
   m_ObjectHideFlags: 0
@@ -82259,9 +82259,9 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 118092350}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 60.5, y: -15}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 40, y: 14}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &960448516
@@ -94161,6 +94161,10 @@ PrefabInstance:
     - target: {fileID: 5708244558075807634, guid: 029558c84fd7549b2b5340eb1d8fc447, type: 3}
       propertyPath: m_Name
       value: Continue_Button
+      objectReference: {fileID: 0}
+    - target: {fileID: 6831440649990751614, guid: 029558c84fd7549b2b5340eb1d8fc447, type: 3}
+      propertyPath: instanceId
+      value: 70b89a17-1866-46fd-8e1f-9323203f3e97
       objectReference: {fileID: 0}
     - target: {fileID: 7421412936448582125, guid: 029558c84fd7549b2b5340eb1d8fc447, type: 3}
       propertyPath: m_AnchorMax.y
@@ -122823,9 +122827,9 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 935870682}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 4, y: -12}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 8, y: 16}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1367773287
@@ -123184,7 +123188,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7847449403238870662, guid: abfaad578d05e4a09838223134c41c46, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -131003,7 +131007,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   initializeFirebaseOnStart: 1
-  email: windows@gmail.com
+  email: testing@gmail.com
   password: zaf123
   signInOnStart: 1
   createUserIfMissing: 1
@@ -131055,7 +131059,7 @@ MonoBehaviour:
   shareCurrentSessionOnStart: 0
   loadOwnedSessionsOnStart: 0
   loadSharedWithMeOnStart: 1
-  invitedEmail: testing@gmail.com
+  invitedEmail: windows@gmail.com
   invitedEmailInput: {fileID: 0}
   sharedSessionId: e9cb6f153a684793ac7711d48c3c242d
   sharedSessionIdInput: {fileID: 0}
@@ -140532,7 +140536,10 @@ PrefabInstance:
     - targetCorrespondingSourceObject: {fileID: 1236907209971260811, guid: 029558c84fd7549b2b5340eb1d8fc447, type: 3}
       insertIndex: -1
       addedObject: {fileID: 528608680}
-    m_AddedComponents: []
+    m_AddedComponents:
+    - targetCorrespondingSourceObject: {fileID: 7449958266268149776, guid: 029558c84fd7549b2b5340eb1d8fc447, type: 3}
+      insertIndex: -1
+      addedObject: {fileID: 0}
   m_SourcePrefab: {fileID: 100100000, guid: 029558c84fd7549b2b5340eb1d8fc447, type: 3}
 --- !u!4 &1574303139 stripped
 Transform:
@@ -149880,7 +149887,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   blockId: 5838e892-31a4-4f65-a415-dc108aefa14c
-  instanceId: 0152982a-ff0d-4861-82e0-c003e45c1d2b
+  instanceId: daa0af54-fef0-4c72-8882-b471b7f9525b
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: c88fc9f2-e9d1-41ea-b937-cdaf92a806d0
@@ -150216,9 +150223,9 @@ RectTransform:
   - {fileID: 351097006}
   m_Father: {fileID: 935870682}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 28, y: -12}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 40, y: 30}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1673615539
@@ -154470,7 +154477,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5464317018167149569, guid: 749c2b64d9125458da0686ace4bec00b, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -156117,7 +156124,7 @@ MonoBehaviour:
   quackAudioSource: {fileID: 0}
   quackVolume: 0.846
   startupFlowRouter: {fileID: 1735220665}
-  finalScreenFallbackRoot: {fileID: 815482284}
+  finalScreenFallbackRoot: {fileID: 1481457977}
   finalScreenRootsToHide:
   - {fileID: 859028440}
   - {fileID: 1481457977}
@@ -168261,7 +168268,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!4 &1889623090
 Transform:
   m_ObjectHideFlags: 0
@@ -171818,7 +171825,31 @@ MonoBehaviour:
       m_Calls:
       - m_Target: {fileID: 1469457379}
         m_TargetAssemblyTypeName: FirestoreSessionDebugTester, Assembly-CSharp
+        m_MethodName: InviteByEmail
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 1
+        m_CallState: 2
+      - m_Target: {fileID: 1469457379}
+        m_TargetAssemblyTypeName: FirestoreSessionDebugTester, Assembly-CSharp
         m_MethodName: ShareCurrentSession
+        m_Mode: 1
+        m_Arguments:
+          m_ObjectArgument: {fileID: 0}
+          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
+          m_IntArgument: 0
+          m_FloatArgument: 0
+          m_StringArgument: 
+          m_BoolArgument: 1
+        m_CallState: 2
+      - m_Target: {fileID: 1228074136}
+        m_TargetAssemblyTypeName: SavedSessionActions, Assembly-CSharp
+        m_MethodName: SaveCurrentSession
         m_Mode: 1
         m_Arguments:
           m_ObjectArgument: {fileID: 0}
@@ -173366,9 +173397,9 @@ RectTransform:
   m_Children: []
   m_Father: {fileID: 1673615538}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 20, y: -15}
+  m_AnchorMin: {x: 0, y: 0}
+  m_AnchorMax: {x: 0, y: 0}
+  m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 40, y: 14}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &1933410214
@@ -174351,7 +174382,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   blockId: 5838e892-31a4-4f65-a415-dc108aefa14c
-  instanceId: a206c350-9d9e-49e1-807d-d441a8251fa0
+  instanceId: 7a03b5b8-a5be-4225-b866-439043c4fe29
   version: 1
   installationRoutineCheckpoint:
     _installationRoutineId: c88fc9f2-e9d1-41ea-b937-cdaf92a806d0
@@ -192479,7 +192510,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7042133912099342345, guid: 946c4bcf5ee78c2438bd71dd2f9fe1f9, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7042133912099342452, guid: 946c4bcf5ee78c2438bd71dd2f9fe1f9, type: 3}
       propertyPath: m_LocalPosition.x
@@ -192679,7 +192710,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 5228241647023865434, guid: 927c1b782bb796b4b9b433d533cbccca, type: 3}
       propertyPath: m_IsActive
-      value: 0
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 7376517437398570920, guid: 927c1b782bb796b4b9b433d533cbccca, type: 3}
       propertyPath: m_IsActive
