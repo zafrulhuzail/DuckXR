@@ -34,6 +34,11 @@ public class RunWhisper : MonoBehaviour
     public string tmpChildName = "Transcription1";
     public bool clearOldDraftsOnNew = false;
 
+    [Header("Draft Board Snapping")]
+    [SerializeField] private bool enableDraftBoardSnapping = false;
+    [SerializeField] private RectTransform draftBoardSnapTarget;
+    [SerializeField] private RectTransform finalBoardSnapTarget;
+
     [Header("Fallback (optional old slot mode)")]
     public TMP_Text[] transcriptionSlots;       // optional
     public int activeSlot = 0;
@@ -180,6 +185,7 @@ public class RunWhisper : MonoBehaviour
         currentDraftInstance.transform.localRotation = Quaternion.identity;
         currentDraftInstance.transform.localScale = Vector3.one;
         currentDraftInstance.name = draftPrefab.name;
+        ConfigureDraftBoardSnapping(currentDraftInstance);
 
         // Try by child name first (works if TMP object name is consistent)
         if (!string.IsNullOrEmpty(tmpChildName))
@@ -195,6 +201,18 @@ public class RunWhisper : MonoBehaviour
         // Fallback: first TMP inside the Draft
         var anyTmp = currentDraftInstance.GetComponentInChildren<TMP_Text>(true);
         return anyTmp;
+    }
+
+    void ConfigureDraftBoardSnapping(GameObject draftInstance)
+    {
+        if (!enableDraftBoardSnapping || draftInstance == null)
+            return;
+
+        var snapper = draftInstance.GetComponent<DraftBoardSnapper>();
+        if (snapper == null)
+            snapper = draftInstance.AddComponent<DraftBoardSnapper>();
+
+        snapper.Configure(draftBoardSnapTarget, finalBoardSnapTarget);
     }
 
     void CleanupPerSessionTensors()

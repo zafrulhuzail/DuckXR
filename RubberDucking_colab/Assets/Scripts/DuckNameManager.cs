@@ -16,7 +16,17 @@ public class DuckNameManager : MonoBehaviour
     public string duckChatBubbleFormat = "Hi {userName}!\nI am {duckName}.";
     public bool hideChatBubbleUntilNamed = true;
 
+    [Header("Sounds")]
+    [SerializeField] private AudioClip quackClip;
+    [SerializeField] private AudioSource quackAudioSource;
+    [SerializeField] [Range(0f, 1f)] private float quackVolume = 1f;
+
     public string duckName { get; private set; } = "";
+
+    void Awake()
+    {
+        EnsureAudioSource();
+    }
 
     void OnEnable()
     {
@@ -42,6 +52,8 @@ public class DuckNameManager : MonoBehaviour
 
         Debug.Log("DUCK NAME SET TO: " + duckName);
 
+        PlayQuack();
+
         string userName = userNameManager != null ? userNameManager.userName : string.Empty;
 
         if (nameText != null)
@@ -62,5 +74,30 @@ public class DuckNameManager : MonoBehaviour
             
         if (animation != null)
             animation.SetActive(false);
+    }
+
+    private void PlayQuack()
+    {
+        if (quackClip == null)
+            return;
+
+        EnsureAudioSource();
+        if (quackClip.loadState == AudioDataLoadState.Unloaded)
+            quackClip.LoadAudioData();
+
+        quackAudioSource.PlayOneShot(quackClip, quackVolume);
+    }
+
+    private void EnsureAudioSource()
+    {
+        if (quackAudioSource != null)
+            return;
+
+        quackAudioSource = GetComponent<AudioSource>();
+        if (quackAudioSource == null)
+            quackAudioSource = gameObject.AddComponent<AudioSource>();
+
+        quackAudioSource.playOnAwake = false;
+        quackAudioSource.spatialBlend = 0f;
     }
 }
