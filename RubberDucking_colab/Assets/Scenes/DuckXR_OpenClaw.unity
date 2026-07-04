@@ -134358,7 +134358,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   initializeFirebaseOnStart: 1
-  email: testing@gmail.com
+  email: windows@gmail.com
   password: zaf123
   signInOnStart: 1
   createUserIfMissing: 1
@@ -134409,8 +134409,8 @@ MonoBehaviour:
   outputText: {fileID: 1229627478}
   shareCurrentSessionOnStart: 0
   loadOwnedSessionsOnStart: 0
-  loadSharedWithMeOnStart: 1
-  invitedEmail: windows@gmail.com
+  loadSharedWithMeOnStart: 0
+  invitedEmail: testing@gmail.com
   invitedEmailInput: {fileID: 0}
   sharedSessionId: e9cb6f153a684793ac7711d48c3c242d
   sharedSessionIdInput: {fileID: 0}

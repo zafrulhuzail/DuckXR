@@ -34,6 +34,13 @@ public class BoardSummarizer : MonoBehaviour
     [SerializeField] private string loadingText = "Summarizing notes...";
     [SerializeField] private string emptyStateText = "No notes found to summarize.";
 
+    private float _initialOutputPanelHeight;
+
+    private void Awake()
+    {
+        CacheInitialOutputPanelHeight();
+    }
+
     private void OnEnable()
     {
         if (relay != null)
@@ -50,6 +57,17 @@ public class BoardSummarizer : MonoBehaviour
             relay.OnRelayTextReceived -= HandleRelayTextReceived;
             relay.OnRelayRequestFailed -= HandleRelayRequestFailed;
         }
+    }
+
+    private void CacheInitialOutputPanelHeight()
+    {
+        if (outputPanel == null)
+        {
+            _initialOutputPanelHeight = 0f;
+            return;
+        }
+
+        _initialOutputPanelHeight = Mathf.Max(outputPanel.rect.height, outputPanel.sizeDelta.y, 0f);
     }
 
     [ContextMenu("Summarize Notes")]
@@ -169,7 +187,12 @@ public class BoardSummarizer : MonoBehaviour
 
         if (outputPanel != null)
         {
-            var height = Mathf.Max(outputPanelMinHeight, preferred.y + outputPanelPaddingY);
+            if (Mathf.Approximately(_initialOutputPanelHeight, 0f))
+            {
+                CacheInitialOutputPanelHeight();
+            }
+
+            var height = Mathf.Max(outputPanelMinHeight, _initialOutputPanelHeight, preferred.y + outputPanelPaddingY);
             outputPanel.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, height);
             return;
         }
