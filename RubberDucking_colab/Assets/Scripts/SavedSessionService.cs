@@ -1,0 +1,363 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using UnityEngine;
+
+[Serializable]
+public class SavedVector3Data
+{
+    public float x;
+    public float y;
+    public float z;
+
+    public static SavedVector3Data FromVector3(Vector3 value)
+    {
+        return new SavedVector3Data { x = value.x, y = value.y, z = value.z };
+    }
+}
+
+[Serializable]
+public class SavedTranscriptNote
+{
+    public string id;
+    public string text;
+    public string createdAtUtc;
+    public SavedVector3Data localPosition;
+    public SavedVector3Data localRotationEuler;
+    public SavedVector3Data localScale;
+    public int siblingIndex;
+}
+
+[Serializable]
+public class SavedSessionData
+{
+    public string id;
+    public string title;
+    public string userName;
+    public string duckName;
+    public string createdAtUtc;
+    public string updatedAtUtc;
+    public List<SavedTranscriptNote> notes = new List<SavedTranscriptNote>();
+}
+
+[Serializable]
+public class SavedSessionSummary
+{
+    public string id;
+    public string title;
+    public string userName;
+    public string duckName;
+    public string createdAtUtc;
+    public string updatedAtUtc;
+    public int noteCount;
+    public string latestNotePreview;
+}
+
+[Serializable]
+public class SavedSessionIndex
+{
+    public List<SavedSessionSummary> sessions = new List<SavedSessionSummary>();
+}
+
+public static class SavedSessionService
+{
+    private static SavedSessionData _currentSession;
+    private static SavedSessionIndex _cachedIndex;
+
+    public static SavedSessionData CurrentSession => _currentSession;
+
+    private static string BaseFolder => Path.Combine(Application.persistentDataPath, "saved-sessions");
+    private static string SessionsFolder => Path.Combine(BaseFolder, "sessions");
+    private static string IndexPath => Path.Combine(BaseFolder, "index.json");
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void InitializeOnLoad()
+    {
+        EnsureStorage();
+        _currentSession = null;
+    }
+
+    public static SavedSessionData EnsureCurrentSession()
+    {
+        return _currentSession;
+    }
+
+    public static SavedSessionData StartNewSession(string title = null)
+    {
+        EnsureStorage();
+        _currentSession = CreateNewSession(title);
+        ApplyCurrentProfileToCurrentSession();
+        SaveCurrentSession();
+        return _currentSession;
+    }
+
+    public static void SetUserName(string userName)
+    {
+        userName = Sanitize(userName);
+
+        if (_currentSession == null)
+            return;
+
+        _currentSession.userName = userName;
+        RefreshTitle(_currentSession);
+        SaveCurrentSession();
+    }
+
+    public static void SetDuckName(string duckName)
+    {
+        duckName = Sanitize(duckName);
+
+        if (_currentSession == null)
+            return;
+
+        _currentSession.duckName = duckName;
+        RefreshTitle(_currentSession);
+        SaveCurrentSession();
+    }
+
+    public static SavedTranscriptNote AddTranscriptNote(string text, Transform noteTransform = null)
+    {
+        text = Sanitize(text);
+        if (string.IsNullOrWhiteSpace(text))
+            return null;
+
+        if (_currentSession == null)
+        {
+            Debug.Log("SavedSessionService: No active session. Skipping transcript save.");
+            return null;
+        }
+
+        var session = _currentSession;
+        var note = new SavedTranscriptNote
+        {
+            id = Guid.NewGuid().ToString("N"),
+            text = text,
+            createdAtUtc = DateTime.UtcNow.ToString("o")
+        };
+
+        ApplyTransformData(note, noteTransform);
+
+        session.notes.Add(note);
+        SaveCurrentSession();
+        return note;
+    }
+
+    public static bool UpdateNoteTransform(string noteId, Transform noteTransform)
+    {
+        if (string.IsNullOrWhiteSpace(noteId) || noteTransform == null || _currentSession == null)
+            return false;
+
+        var session = _currentSession;
+        var note = session.notes.Find(n => n.id == noteId);
+        if (note == null)
+            return false;
+
+        ApplyTransformData(note, noteTransform);
+        SaveCurrentSession();
+        return true;
+    }
+
+    public static SavedSessionIndex LoadIndex()
+    {
+        EnsureStorage();
+
+        if (_cachedIndex != null)
+            return _cachedIndex;
+
+        if (!File.Exists(IndexPath))
+        {
+            _cachedIndex = new SavedSessionIndex();
+            return _cachedIndex;
+        }
+
+        try
+        {
+            var json = File.ReadAllText(IndexPath);
+            _cachedIndex = JsonUtility.FromJson<SavedSessionIndex>(json) ?? new SavedSessionIndex();
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"SavedSessionService: Failed to load index: {e.Message}");
+            _cachedIndex = new SavedSessionIndex();
+        }
+
+        return _cachedIndex;
+    }
+
+    public static SavedSessionData LoadSession(string sessionId)
+    {
+        EnsureStorage();
+        if (string.IsNullOrWhiteSpace(sessionId))
+            return null;
+
+        var path = GetSessionPath(sessionId);
+        if (!File.Exists(path))
+            return null;
+
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonUtility.FromJson<SavedSessionData>(json);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning($"SavedSessionService: Failed to load session '{sessionId}': {e.Message}");
+            return null;
+        }
+    }
+
+    public static bool ResumeSession(string sessionId)
+    {
+        var loaded = LoadSession(sessionId);
+        if (loaded == null)
+            return false;
+
+        _currentSession = loaded;
+        SaveCurrentSession();
+        Debug.Log($"SavedSessionService: Resumed session {sessionId}");
+        return true;
+    }
+
+    public static void SaveCurrentSession()
+    {
+        if (_currentSession == null)
+            return;
+
+        EnsureStorage();
+
+        _currentSession.updatedAtUtc = DateTime.UtcNow.ToString("o");
+        RefreshTitle(_currentSession);
+
+        try
+        {
+            File.WriteAllText(GetSessionPath(_currentSession.id), JsonUtility.ToJson(_currentSession, true));
+            UpsertSummary(_currentSession);
+            Debug.Log($"SavedSessionService: Saved session {_currentSession.id} ({_currentSession.notes.Count} notes)");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"SavedSessionService: Failed to save current session: {e.Message}");
+        }
+    }
+
+    public static void ClearAllSavedSessions()
+    {
+        try
+        {
+            if (Directory.Exists(BaseFolder))
+                Directory.Delete(BaseFolder, true);
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"SavedSessionService: Failed to clear saved sessions: {e.Message}");
+        }
+
+        _currentSession = null;
+        _cachedIndex = null;
+
+        EnsureStorage();
+        Debug.Log("SavedSessionService: Cleared all saved sessions and rebuilt storage.");
+    }
+
+    private static SavedSessionData CreateNewSession(string title = null)
+    {
+        var now = DateTime.UtcNow.ToString("o");
+        var session = new SavedSessionData
+        {
+            id = Guid.NewGuid().ToString("N"),
+            createdAtUtc = now,
+            updatedAtUtc = now,
+            title = string.IsNullOrWhiteSpace(title) ? "Untitled session" : title.Trim()
+        };
+        return session;
+    }
+
+    private static void ApplyTransformData(SavedTranscriptNote note, Transform noteTransform)
+    {
+        if (note == null || noteTransform == null)
+            return;
+
+        note.localPosition = SavedVector3Data.FromVector3(noteTransform.localPosition);
+        note.localRotationEuler = SavedVector3Data.FromVector3(noteTransform.localEulerAngles);
+        // note.localScale = SavedVector3Data.FromVector3(noteTransform.localScale);
+        note.localScale = null;
+        note.siblingIndex = noteTransform.GetSiblingIndex();
+    }
+
+    private static void UpsertSummary(SavedSessionData session)
+    {
+        var index = LoadIndex();
+        var summary = index.sessions.Find(s => s.id == session.id);
+        if (summary == null)
+        {
+            summary = new SavedSessionSummary();
+            index.sessions.Add(summary);
+        }
+
+        summary.id = session.id;
+        summary.title = session.title;
+        summary.userName = session.userName;
+        summary.duckName = session.duckName;
+        summary.createdAtUtc = session.createdAtUtc;
+        summary.updatedAtUtc = session.updatedAtUtc;
+        summary.noteCount = session.notes != null ? session.notes.Count : 0;
+        summary.latestNotePreview = summary.noteCount > 0 ? BuildPreview(session.notes[summary.noteCount - 1].text) : string.Empty;
+
+        index.sessions.Sort((a, b) => string.CompareOrdinal(b.updatedAtUtc, a.updatedAtUtc));
+        _cachedIndex = index;
+
+        File.WriteAllText(IndexPath, JsonUtility.ToJson(index, true));
+    }
+
+    private static void RefreshTitle(SavedSessionData session)
+    {
+        if (session == null)
+            return;
+
+        string duck = Sanitize(session.duckName);
+        string user = Sanitize(session.userName);
+
+        if (!string.IsNullOrWhiteSpace(duck) && !string.IsNullOrWhiteSpace(user))
+            session.title = $"{duck} · {user}";
+        else if (!string.IsNullOrWhiteSpace(duck))
+            session.title = duck;
+        else if (!string.IsNullOrWhiteSpace(user))
+            session.title = user;
+        else if (string.IsNullOrWhiteSpace(session.title))
+            session.title = "Untitled session";
+    }
+
+    private static void ApplyCurrentProfileToCurrentSession()
+    {
+        if (_currentSession == null)
+            return;
+
+        _currentSession.userName = Sanitize(PlayerPrefs.GetString("LastUserName", string.Empty));
+        _currentSession.duckName = Sanitize(PlayerPrefs.GetString("LastDuckName", string.Empty));
+        RefreshTitle(_currentSession);
+    }
+
+    private static string BuildPreview(string text)
+    {
+        text = Sanitize(text);
+        if (text.Length <= 80)
+            return text;
+        return text.Substring(0, 77) + "...";
+    }
+
+    private static string Sanitize(string value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+    }
+
+    private static void EnsureStorage()
+    {
+        Directory.CreateDirectory(BaseFolder);
+        Directory.CreateDirectory(SessionsFolder);
+    }
+
+    private static string GetSessionPath(string sessionId)
+    {
+        return Path.Combine(SessionsFolder, sessionId + ".json");
+    }
+}

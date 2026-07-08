@@ -1,0 +1,42 @@
+using TMPro;
+using UnityEngine;
+
+public class SavedSessionsListController : MonoBehaviour
+{
+    [Header("Optional UI")]
+    [SerializeField] private TMP_Text outputText;
+    [SerializeField] private SavedSessionsBrowser browser;
+
+    private void OnEnable()
+    {
+        Refresh();
+    }
+
+    public void Refresh()
+    {
+        if (browser != null)
+        {
+            browser.Refresh();
+
+            if (outputText != null)
+            {
+                outputText.text = browser.SessionCount <= 0
+                    ? "No saved sessions yet."
+                    : $"{browser.SessionCount} saved sessions ready.";
+            }
+
+            return;
+        }
+
+        var index = SavedSessionService.LoadIndex();
+        if (outputText == null)
+        {
+            Debug.Log($"SavedSessionsListController: {index.sessions.Count} saved sessions loaded.");
+            return;
+        }
+
+        outputText.text = index.sessions.Count == 0
+            ? "No saved sessions yet."
+            : $"{index.sessions.Count} saved sessions loaded.";
+    }
+}

@@ -6,6 +6,10 @@ using Unity.Collections;
 using Newtonsoft.Json;
 using TMPro;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
+using System;
+using System.Threading;
+
 public class RunWhisper : MonoBehaviour
 {
     Worker decoder1, decoder2, encoder, spectrogram;
@@ -19,34 +23,60 @@ public class RunWhisper : MonoBehaviour
     const int sampleRate = 16000;              // Whisper expects 16 kHz
 
     [Header("Recording Control")]
-    public bool startRecording = false; // toggle this to trigger recording
-    private bool isRecording = false;   // internal safety to prevent double calls
+    public KeyCode recordKey = KeyCode.R;       // press R to start recording
+    public KeyCode stopKey = KeyCode.S;
+    private bool isRecording = false;           // internal safety to prevent double calls
 
-    [Header("Recording Control")]
-    public KeyCode recordKey = KeyCode.R;   // press R to start recording
+    [Header("Spawn Draft Each Recording (NEW)")]
+    public GameObject draftPrefab;              // Drag Draft prefab here
+    public Transform draftParent;               // Drag Spawn Point here
+    [Tooltip("Optional: find TMP by child name (e.g. Transcription1). If empty, uses first TMP found in Draft.")]
+    public string tmpChildName = "Transcription1";
+    public bool clearOldDraftsOnNew = false;
 
-    [Header("Transcription Targets")]
-    public TMP_Text[] transcriptionSlots;   // assign in Inspector
+    [Header("Draft Board Snapping")]
+    [SerializeField] private bool enableDraftBoardSnapping = false;
+    [SerializeField] private RectTransform draftBoardSnapTarget;
+    [SerializeField] private RectTransform finalBoardSnapTarget;
+
+    [Header("Fallback (optional old slot mode)")]
+    public TMP_Text[] transcriptionSlots;       // optional
+    public int activeSlot = 0;
+
     private TMP_Text currentSlot;
-
-public int activeSlot = 0;
     private AudioClip micClip;
     public AudioClip audioClip;
+
+    // This is the TMP we write into (set per recording when Draft spawns)
     public TMP_Text whisperText;
+    CancellationTokenSource micCTS;
 
-    // This is how many tokens you want. It can be adjusted.
-    const int maxTokens = 100;
+    // ===== PERF: "Process first, update only at the end" =====
+    [Header("UI Mode")]
+    [Tooltip("If true: do NOT update TMP during decoding. Text is set once when transcription finishes.")]
+    public bool updateOnlyAtEnd = true;
 
-    // Special tokens see added tokens file for details
+    [Header("Timer UI")]
+    public string timerChildName = "TimerUI";
+    public bool showTimer = true;
+    private TMP_Text currentTimerText;
+
+    // ===== PERF: avoid per-token allocations =====
+    private readonly StringBuilder outputSb = new StringBuilder(8192);        // full transcript
+    private readonly StringBuilder currentSentence = new StringBuilder(512);  // current partial sentence
+    private readonly StringBuilder bulletsSb = new StringBuilder(4096);       // finalized lines
+
+    const int maxTokens = 448;
+
+    // Special tokens
     const int END_OF_TEXT = 50257;
     const int START_OF_TRANSCRIPT = 50258;
     const int ENGLISH = 50259;
     const int GERMAN = 50261;
     const int FRENCH = 50265;
-    const int TRANSCRIBE = 50359; //for speech-to-text in specified language
-    const int TRANSLATE = 50358;  //for speech-to-text then translate to English
+    const int TRANSCRIBE = 50359;
+    const int TRANSLATE = 50358;
     const int NO_TIME_STAMPS = 50363;
-    const int START_TIME = 50364;
 
     int numSamples;
     string[] tokens;
@@ -60,7 +90,8 @@ public int activeSlot = 0;
     Tensor<float> encodedAudio;
 
     bool transcribe = false;
-    string outputString = "";
+    public string outputString { get; private set; } = "";
+    public event Action<string> OnTranscriptionFinished;
 
     // Maximum size of audioClip (30s at 16kHz)
     const int maxSamples = 30 * 16000;
@@ -69,16 +100,23 @@ public int activeSlot = 0;
     public ModelAsset audioEncoder;
     public ModelAsset logMelSpectro;
 
+    Awaitable m_Awaitable;
+
+    NativeArray<int> lastToken;
+    Tensor<int> lastTokenTensor;
+    Tensor<int> tokensTensor;
+    Tensor<float> audioInput;
+
+    [Header("Tokenizer")]
+    public TextAsset vocabAsset;
+
     public async void Start()
     {
-        Debug.Log($"Clip: {audioClip.name}, length: {audioClip.length:F2}s, freq: {audioClip.frequency} Hz, channels: {audioClip.channels}");
-        Debug.Log("Unity microphones: " + string.Join(", ", Microphone.devices));
         currentSlot = CurrentTextSlot;
         whisperText = currentSlot;
+
         SetupWhiteSpaceShifts();
         GetTokens();
-
-        Debug.Log("Ready. Awaiting recording trigger...");
 
         decoder1 = new Worker(ModelLoader.Load(audioDecoder1), BackendType.GPUCompute);
         decoder2 = new Worker(ModelLoader.Load(audioDecoder2), BackendType.GPUCompute);
@@ -94,76 +132,190 @@ public int activeSlot = 0;
 
         outputTokens = new NativeArray<int>(maxTokens, Allocator.Persistent);
 
+        // Static prefix tokens (we reset tokenCount per session)
         outputTokens[0] = START_OF_TRANSCRIPT;
-        outputTokens[1] = ENGLISH;// GERMAN;//FRENCH;//
-        outputTokens[2] = TRANSCRIBE; //TRANSLATE;//
-        //outputTokens[3] = NO_TIME_STAMPS;// START_TIME;//
+        outputTokens[1] = ENGLISH;     // change to GERMAN / FRENCH if needed
+        outputTokens[2] = TRANSCRIBE;  // or TRANSLATE
         tokenCount = 3;
 
-        Debug.Log("Whisper ready. Press " + recordKey + " to record from mic.");
+        Debug.Log("Whisper ready. Press " + recordKey + " to record.");
     }
 
-    private void Update()
-    {
-        whisperText = currentSlot;
-        Debug.Log("Active Slot: " + activeSlot);
-        Debug.Log("Entering Update function");
-        // Debug.Log("Value of " + audioInput.GetKeyDown(recordKey));
-        Debug.Log("Value of " + isRecording);
-        // if (!useMicrophone)
-        //     return; // only use keyboard when mic mode is on
+    // private void Update()
+    // {
+    //     currentSlot = CurrentTextSlot;
 
-        if (Input.GetKeyDown(recordKey) && !isRecording)
-        {
-            StartMicTranscription();
-            // isRecording = false;
-        }
-    }
+    //     if (Input.GetKeyDown(recordKey) && !isRecording)
+    //         StartMicTranscription();
+
+    //     if (Input.GetKeyDown(stopKey) && isRecording)
+    //         StopRecordingEarly();
+    // }
+
     TMP_Text CurrentTextSlot
     {
         get
         {
+            if (transcriptionSlots == null || transcriptionSlots.Length == 0)
+                return null;
+
             if (activeSlot < 0 || activeSlot >= transcriptionSlots.Length)
                 return null;
+
             return transcriptionSlots[activeSlot];
         }
     }
+
+    private GameObject currentDraftInstance;
+
+    TMP_Text SpawnDraftAndGetTMP()
+    {
+        if (draftPrefab == null || draftParent == null)
+            return null;
+
+        if (clearOldDraftsOnNew)
+        {
+            for (int i = draftParent.childCount - 1; i >= 0; i--)
+                Destroy(draftParent.GetChild(i).gameObject);
+        }
+
+        currentDraftInstance = Instantiate(draftPrefab, draftParent);
+        currentDraftInstance.transform.SetAsFirstSibling(); // put at top of list
+        currentDraftInstance.transform.localPosition = Vector3.zero;
+        currentDraftInstance.transform.localRotation = Quaternion.identity;
+        currentDraftInstance.transform.localScale = Vector3.one;
+        currentDraftInstance.name = draftPrefab.name;
+        ConfigureDraftBoardSnapping(currentDraftInstance);
+
+        // Try by child name first (works if TMP object name is consistent)
+        if (!string.IsNullOrEmpty(tmpChildName))
+        {
+            var t = currentDraftInstance.transform.Find(tmpChildName);
+            if (t != null)
+            {
+                var tmp = t.GetComponent<TMP_Text>();
+                if (tmp != null) return tmp;
+            }
+        }
+
+        // Fallback: first TMP inside the Draft
+        var anyTmp = currentDraftInstance.GetComponentInChildren<TMP_Text>(true);
+        return anyTmp;
+    }
+
+    void ConfigureDraftBoardSnapping(GameObject draftInstance)
+    {
+        if (!enableDraftBoardSnapping || draftInstance == null)
+            return;
+
+        var snapper = draftInstance.GetComponent<DraftBoardSnapper>();
+        if (snapper == null)
+            snapper = draftInstance.AddComponent<DraftBoardSnapper>();
+
+        snapper.Configure(draftBoardSnapTarget, finalBoardSnapTarget);
+    }
+
+    void CleanupPerSessionTensors()
+    {
+        // These are created per transcription; dispose before creating new ones
+        if (audioInput != null)
+        {
+            audioInput.Dispose();
+            audioInput = null;
+        }
+
+        if (tokensTensor != null)
+        {
+            tokensTensor.Dispose();
+            tokensTensor = null;
+        }
+
+        if (lastTokenTensor != null)
+        {
+            lastTokenTensor.Dispose();
+            lastTokenTensor = null;
+        }
+
+        if (lastToken.IsCreated)
+        {
+            lastToken.Dispose();
+        }
+    }
+
     async void StartMicTranscription()
     {
         isRecording = true;
 
-        if (whisperText != null)
-            whisperText.text = "Listening...";
+        // NEW: Spawn a whole Draft block and use its TMP
+        TMP_Text spawnedTmp = SpawnDraftAndGetTMP();
+        if (spawnedTmp != null)
+        {
+            whisperText = spawnedTmp;
+        }
+        else
+        {
+            // Fallback to existing slot if draft prefab isn't configured
+            if (whisperText == null)
+            whisperText = currentSlot;
+        }
 
+        // if (whisperText != null)
+        //     whisperText.text = useMicrophone ? "Listening..." : "Processing...";
+
+        // Reset per-session state
+        outputSb.Clear();
+        outputString = "";
+        bulletsSb.Clear();
+        currentSentence.Clear();
+
+        // Reset token prefix for this session
+        tokenCount = 3;
+        outputTokens[0] = START_OF_TRANSCRIPT;
+        outputTokens[1] = ENGLISH;     // change language if needed
+        outputTokens[2] = TRANSCRIBE;  // or TRANSLATE
+
+        // Clean up any previous session tensors
+        CleanupPerSessionTensors();
+
+        // Record/load audio
         if (useMicrophone)
         {
-            await RecordFromMicrophone();          // record into micClip + LoadAudioFromClip
+            await RecordFromMicrophone();
         }
         else
         {
             if (audioClip == null)
             {
                 Debug.LogError("No AudioClip assigned and useMicrophone is false.");
+                isRecording = false;
                 return;
             }
-
-            LoadAudio(audioClip);          // old behaviour
+            LoadAudio(audioClip);
         }
+
+        // if (whisperText != null)
+        //     whisperText.text = "Transcribing...";
+
         EncodeAudio();
         transcribe = true;
 
+        // Prepare token tensors
         tokensTensor = new Tensor<int>(new TensorShape(1, maxTokens));
         ComputeTensorData.Pin(tokensTensor);
         tokensTensor.Reshape(new TensorShape(1, tokenCount));
         tokensTensor.dataOnBackend.Upload<int>(outputTokens, tokenCount);
 
-        lastToken = new NativeArray<int>(1, Allocator.Persistent); lastToken[0] = NO_TIME_STAMPS;
+        lastToken = new NativeArray<int>(1, Allocator.Persistent);
+        lastToken[0] = NO_TIME_STAMPS;
+
         lastTokenTensor = new Tensor<int>(new TensorShape(1, 1), new[] { NO_TIME_STAMPS });
 
+        // Run decoding loop
         while (true)
         {
             if (!transcribe || tokenCount >= (outputTokens.Length - 1))
                 break;
+
             m_Awaitable = InferenceStep();
             await m_Awaitable;
         }
@@ -171,41 +323,21 @@ public int activeSlot = 0;
         isRecording = false;
     }
 
-
-    Awaitable m_Awaitable;
-
-    NativeArray<int> lastToken;
-    Tensor<int> lastTokenTensor;
-    Tensor<int> tokensTensor;
-    Tensor<float> audioInput;
-
-    // void LoadAudio()
-    // {
-    //     numSamples = audioClip.samples;
-    //     var data = new float[maxSamples];
-    //     numSamples = maxSamples;
-    //     audioClip.GetData(data, 0);
-    //     audioInput = new Tensor<float>(new TensorShape(1, numSamples), data);
-    // }
-
     void LoadAudio(AudioClip clip)
     {
         if (clip == null)
         {
-            Debug.LogError("LoadAudioFromClip: clip is null");
+            Debug.LogError("LoadAudio: clip is null");
             return;
         }
 
-        // Always use 30s window, pad with zeros if clip is shorter
         var data = new float[maxSamples];
         numSamples = maxSamples;
 
-        clip.GetData(data, 0); // Unity will just copy what exists
-
+        clip.GetData(data, 0);
         audioInput = new Tensor<float>(new TensorShape(1, numSamples), data);
 
-        Debug.Log($"Loaded audio from {clip.name}, length={clip.length:F2}s, " +
-                $"freq={clip.frequency} Hz, channels={clip.channels}");
+        Debug.Log($"Loaded audio from {clip.name}, length={clip.length:F2}s, freq={clip.frequency} Hz, channels={clip.channels}");
     }
 
     async Task RecordFromMicrophone()
@@ -217,27 +349,67 @@ public int activeSlot = 0;
         }
 
         string micName = Microphone.devices[0];
-
         Debug.Log($"Recording from mic '{micName}' for {micRecordSeconds} seconds @ {sampleRate} Hz");
 
-        // Optional: UI feedback
-        if (whisperText != null)
-            whisperText.text = "Listening...";
+        micCTS?.Dispose();
+        micCTS = new CancellationTokenSource();
+
+        _ = RunCountdownUI(micRecordSeconds, micCTS.Token);
 
         micClip = Microphone.Start(micName, false, micRecordSeconds, sampleRate);
 
-        // Wait until recording starts
         while (Microphone.GetPosition(micName) <= 0) { }
 
-        // Wait for the desired duration
-        await Task.Delay(micRecordSeconds * 1000);
-
-        Microphone.End(micName);
+        bool stoppedEarly = false;
+        try
+        {
+            await Task.Delay(micRecordSeconds * 1000, micCTS.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            stoppedEarly = true;
+            Debug.Log("Microphone recording stopped early.");
+        }
+        finally
+        {
+            Microphone.End(micName);
+        }
 
         LoadAudio(micClip);
+
+        // if (whisperText != null)
+        //     whisperText.text = stoppedEarly ? "Transcribing (stopped early)..." : "Transcribing...";
     }
 
+    async Task RunCountdownUI(int seconds, CancellationToken token)
+    {
+        if (whisperText == null) return;
 
+        for (int t = seconds; t >= 0; t--)
+        {
+            if(t <= 5)
+            {
+                whisperText.SetText("\n\n\n				Listening...\n			Recording ends in " + t.ToString() + "s");
+            }
+            try
+            {
+                await Task.Delay(1000, token);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    public void StopRecordingEarly()
+    {
+        if (micCTS != null && !micCTS.IsCancellationRequested)
+        {
+            micCTS.Cancel();
+            whisperText.SetText("Transcribing (stopped early)...");
+        }
+    }
 
     void EncodeAudio()
     {
@@ -246,6 +418,7 @@ public int activeSlot = 0;
         encoder.Schedule(logmel);
         encodedAudio = encoder.PeekOutput() as Tensor<float>;
     }
+
     async Awaitable InferenceStep()
     {
         decoder1.SetInput("input_ids", tokensTensor);
@@ -293,12 +466,14 @@ public int activeSlot = 0;
 
         var logits = decoder2.PeekOutput("logits") as Tensor<float>;
         argmax.Schedule(logits);
+
         using var t_Token = await argmax.PeekOutput().ReadbackAndCloneAsync() as Tensor<int>;
         int index = t_Token[0];
 
         outputTokens[tokenCount] = lastToken[0];
         lastToken[0] = index;
         tokenCount++;
+
         tokensTensor.Reshape(new TensorShape(1, tokenCount));
         tokensTensor.dataOnBackend.Upload<int>(outputTokens, tokenCount);
         lastTokenTensor.dataOnBackend.Upload<int>(lastToken, 1);
@@ -306,34 +481,83 @@ public int activeSlot = 0;
         if (index == END_OF_TEXT)
         {
             transcribe = false;
-            Debug.Log("Whisper: " + outputString);
+
+            // Finalize any remaining partial sentence
+            FinalizeCurrentSentenceToBullets();
+
+            // Build final output once
+            outputString = outputSb.ToString();
+
+            
             if (whisperText != null)
-            whisperText.text = outputString;   // show final text
+            {
+                whisperText.SetText(bulletsSb);
+            }
 
+            var savedNote = SavedSessionService.AddTranscriptNote(outputString, currentDraftInstance != null ? currentDraftInstance.transform : null);
+            if (savedNote != null && currentDraftInstance != null)
+            {
+                var noteInstance = currentDraftInstance.GetComponent<SavedNoteInstance>();
+                if (noteInstance == null)
+                    noteInstance = currentDraftInstance.AddComponent<SavedNoteInstance>();
 
+                noteInstance.noteId = savedNote.id;
+            }
+            else if (savedNote == null)
+            {
+                Debug.Log("RunWhisper: No active session, transcription was not saved as a session note.");
+            }
+
+            OnTranscriptionFinished?.Invoke(outputString);
         }
         else if (index < tokens.Length)
         {
-            outputString += GetUnicodeText(tokens[index]);
-            if (whisperText != null)
-            whisperText.text = outputString;   // show final text
+            string tokenText = GetUnicodeText(tokens[index]);
+
+            // Keep processing in memory only (NO TMP updates here)
+            outputSb.Append(tokenText);
+            currentSentence.Append(tokenText);
+
+            // Only use punctuation to decide when to finalize a bullet line
+            if (HasSentencePunctuation(tokenText))
+            {
+                FinalizeCurrentSentenceToBullets();
+            }
+        }
+    }
+
+    void FinalizeCurrentSentenceToBullets()
+    {
+        if (currentSentence.Length <= 0) return;
+
+        string chunk = CleanChunk(currentSentence.ToString());
+        if (!string.IsNullOrWhiteSpace(chunk))
+        {
+            if (bulletsSb.Length > 0) bulletsSb.Append('\n');
+            bulletsSb.Append(chunk);
         }
 
-        // Debug.Log(outputString);
-        Debug.Log("Whisper: " + outputString);
+        currentSentence.Clear();
+    }
 
+    static bool HasSentencePunctuation(string s)
+    {
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (c == '.' || c == '?' || c == '!')
+                return true;
+        }
+        return false;
     }
 
     // Tokenizer
-    public TextAsset vocabAsset;
     void GetTokens()
     {
         var vocab = JsonConvert.DeserializeObject<Dictionary<string, int>>(vocabAsset.text);
         tokens = new string[vocab.Count];
         foreach (var item in vocab)
-        {
             tokens[item.Value] = item.Key;
-        }
     }
 
     string GetUnicodeText(string text)
@@ -344,12 +568,15 @@ public int activeSlot = 0;
 
     string ShiftCharacterDown(string text)
     {
-        string outText = "";
+        if (string.IsNullOrEmpty(text))
+            return string.Empty;
+
+        var sb = new StringBuilder(text.Length);
         foreach (char letter in text)
         {
-            outText += ((int)letter <= 256) ? letter : (char)whiteSpaceCharacters[(int)(letter - 256)];
+            sb.Append(((int)letter <= 256) ? letter : (char)whiteSpaceCharacters[(int)(letter - 256)]);
         }
-        return outText;
+        return sb.ToString();
     }
 
     void SetupWhiteSpaceShifts()
@@ -365,15 +592,58 @@ public int activeSlot = 0;
         return !(('!' <= c && c <= '~') || ('�' <= c && c <= '�') || ('�' <= c && c <= '�'));
     }
 
+    string CleanChunk(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+            return string.Empty;
+
+        text = Regex.Replace(text, @"\s+", " ");
+        text = Regex.Replace(text, @"\s+([.,!?;:])", "$1");
+        text = text.Trim();
+
+        if (text.Length > 0)
+            text = char.ToUpper(text[0]) + text.Substring(1);
+
+        return text;
+    }
+
+    public void TriggerRecordingFromInteraction()
+    {
+        if (!isRecording)
+        {
+            Debug.Log("TriggerRecordingFromInteraction called");
+            StartMicTranscription();
+        }
+        else
+        {
+            Debug.Log("Whisper is already recording, ignoring trigger.");
+        }
+    }
+
     private void OnDestroy()
     {
-        decoder1.Dispose();
-        decoder2.Dispose();
-        encoder.Dispose();
-        spectrogram.Dispose();
-        argmax.Dispose();
-        audioInput.Dispose();
-        lastTokenTensor.Dispose();
-        tokensTensor.Dispose();
+        decoder1?.Dispose();
+        decoder2?.Dispose();
+        encoder?.Dispose();
+        spectrogram?.Dispose();
+        argmax?.Dispose();
+
+        CleanupPerSessionTensors();
+
+        if (outputTokens.IsCreated)
+            outputTokens.Dispose();
+
+        micCTS?.Dispose();
     }
+
+    private void OnEnable()
+    {
+        WhisperStopSignal.StopRequested += StopRecordingEarly;
+    }
+
+    private void OnDisable()
+    {
+        WhisperStopSignal.StopRequested -= StopRecordingEarly;
+    }
+
 }
